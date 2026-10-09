@@ -1,0 +1,358 @@
+/* =========================================================================
+   SMALLTALK.CREXX  --  a Smalltalk-80 interpreter written in CREXX (Level B)
+
+   Usage:
+       crexx smalltalk.crexx -args [-L libdir] [file.st ...]
+   With no file the program is read from standard input.
+   ========================================================================= */
+options levelb numeric_classic
+import rxfnsb
+import rxfloat
+import _rxsysb
+@@EXPOSE@@
+
+arg av = .string[]
+call init
+libdir = "lib"
+nfiles = 0
+files = .string[]
+utxt = ""
+ia = 1
+do while ia <= av.0
+  oa = av[ia]
+  if oa == "-L" & ia < av.0 then do
+    ia = ia + 1
+    libdir = av[ia]
+  end
+  else if oa == "-h" | oa == "--help" then do
+    say "usage: smalltalk [-L libdir] [file.st ...]"
+    exit 0
+  end
+  else do
+    nfiles = nfiles + 1
+    files[nfiles] = oa
+  end
+  ia = ia + 1
+end
+call boot
+libs = "kernel.st numbers.st collections.st streams.st exceptions.st"
+do ia = 1 to words(libs)
+  lf = libdir || "/" || word(libs, ia)
+  ltxt = read_file(lf)
+  if ltxt == "" then do
+    say "smalltalk: cannot read library file" lf
+    exit 2
+  end
+  call file_in ltxt, word(libs, ia)
+end
+cls_Message = find_class("Message")
+booted = 1
+if nfiles = 0 then do
+  do forever
+    ul = read_stdin_line()
+    if ul = 0 then leave
+    utxt = utxt || o_s[ul % 2] || '0a'x
+  end
+  call file_in utxt, "stdin"
+end
+else do
+  do ia = 1 to nfiles
+    utxt = read_file(files[ia])
+    if utxt == "" then do
+      call outs "smalltalk: cannot read " || files[ia] || '0a'x
+      rc_exit = 1
+    end
+    else call file_in utxt, files[ia]
+    if halted = 1 then leave
+  end
+end
+call flush_out
+exit rc_exit
+
+/* ---------------------------------------------------------------------
+   Output
+   --------------------------------------------------------------------- */
+outs: procedure = .void
+  arg s = .string
+  ob = ob || s
+  if length(ob) > 3000 then call flush_out
+  return
+
+flush_out: procedure = .void
+  rcx = .int
+  if length(ob) > 0 then do
+    assembler fwrite h_out, ob
+    ob = ""
+  end
+  assembler fflush rcx, h_out
+  return
+
+/* ---------------------------------------------------------------------
+   init: declare and initialise all shared state
+   --------------------------------------------------------------------- */
+init: procedure = .void
+  rc_exit = 0
+  halted = 0
+  booted = 0
+  ob = ""
+  h_out = _open("stdout", "w")
+  h_in = _open("stdin", "r")
+  stdin_eof = 0
+  rnd_state = 12345
+  prim_names = "@@PRIMNAMES@@"
+  selboot = "@@SELBOOT@@"
+  /* ---- lexer / parser ---- */
+  txt = ""
+  tp = 1
+  tlen = 0
+  pe = 0
+  src_name = ""
+  tk = 0
+  ts = ""
+  ti = 0
+  tf = 0.0
+  tpos = 0
+  lx_t = 0
+  lx_s = ""
+  lx_i = 0
+  lx_f = 0.0
+  lx_p = 0
+  pk_have = 0
+  pk_t = 0
+  pk_s = ""
+  pk_i = 0
+  pk_f = 0.0
+  pk_p = 0
+  nmk = 0
+  mk_tp = .int[]
+  mk_t = .int[]
+  mk_s = .string[]
+  mk_i = .int[]
+  mk_f = .float[]
+  mk_p = .int[]
+  mk_h = .int[]
+  mk_pt = .int[]
+  mk_ps = .string[]
+  mk_pi = .int[]
+  mk_pf = .float[]
+  mk_pp = .int[]
+  pm_prim = 0
+  pm_tfirst = 0
+  pm_ntemps = 0
+  nnl = 0
+  nl_name = .string[]
+  /* ---- nodes ---- */
+  nnode = 0
+  nt = .int[]
+  n_a = .int[]
+  n_b = .int[]
+  n_c = .int[]
+  n_d = .int[]
+  n_i = .int[]
+  n_s = .string[]
+  nal = 0
+  al = .int[]
+  /* ---- resolver ---- */
+  envn = 0
+  lvl = 0
+  env_name = .string[]
+  env_slot = .int[]
+  env_lvl = .int[]
+  sc_next = .int[]
+  sc_max = .int[]
+  sc_blk = .int[]
+  r_cls = 0
+  r_ntemps = 0
+  r_hasblk = 0
+  ib_first = 0
+  ib_slot = 0
+  rv_kind = 0
+  rv_a = 0
+  rv_b = 0
+  /* ---- objects ---- */
+  no = 0
+  nsl = 0
+  o_cls = .int[]
+  o_kind = .int[]
+  o_n = .int[]
+  o_slot = .int[]
+  o_x = .int[]
+  o_s = .string[]
+  o_f = .float[]
+  sl = .int[]
+  symtab = .stem()
+  chr_oop = .int[]
+  chr_oop[256] = 0
+  nil_oop = 2
+  true_oop = 4
+  false_oop = 6
+  /* ---- classes ---- */
+  nc = 0
+  c_name = .string[]
+  c_ivn = .string[]
+  c_super = .int[]
+  c_meta = .int[]
+  c_ismeta = .int[]
+  c_this = .int[]
+  c_kind = .int[]
+  c_ninst = .int[]
+  c_oop = .int[]
+  cmap = .stem()
+  cvmap = .stem()
+  cls_Object = 0
+  cls_Class = 0
+  cls_Metaclass = 0
+  cls_String = 0
+  cls_Symbol = 0
+  cls_Float = 0
+  cls_Character = 0
+  cls_Array = 0
+  cls_SmallInteger = 0
+  cls_LargePositiveInteger = 0
+  cls_LargeNegativeInteger = 0
+  cls_BlockClosure = 0
+  cls_UndefinedObject = 0
+  cls_Message = 0
+  /* ---- methods ---- */
+  nmeth = 0
+  m_sel = .int[]
+  m_cls = .int[]
+  m_nargs = .int[]
+  m_body = .int[]
+  m_ntemps = .int[]
+  m_hasblk = .int[]
+  m_prim = .int[]
+  m_src = .int[]
+  cm = .int[]
+  lk = .int[]
+  lkg = .int[]
+  gen = 1
+  /* ---- globals, selectors ---- */
+  ng = 0
+  gmap = .stem()
+  g_val = .int[]
+  g_name = .string[]
+  nsel = 0
+  selmap = .stem()
+  sel_name = .string[]
+  sel_n = .int[]
+  /* ---- frames and stacks ---- */
+  nvp = 1
+  vp = .int[]
+  fl_head = .int[]
+  asp = 0
+  ast = .int[]
+  ast[20000] = 0
+  cdepth = 0
+  cs_m = .int[]
+  cs_r = .int[]
+  in_dnu = 0
+  /* ---- unwinding and handlers ---- */
+  unw = 0
+  unw_t = 0
+  unw_v = 0
+  htop = 0
+  hid = 0
+  sigcount = 0
+  h_cls = .int[]
+  h_blk = .int[]
+  h_id = .int[]
+  /* ---- dictionaries ---- */
+  nd0 = 0
+  ne = 0
+  dd_head = .int[]
+  dd_tail = .int[]
+  dd_n = .int[]
+  de_key = .int[]
+  de_val = .int[]
+  de_next = .int[]
+  de_live = .int[]
+  dmap = .stem()
+  /* ---- big integers ---- */
+  bq = ""
+  brm = ""
+  sg = 0
+  mg = ""
+  sq = ""
+  sr = ""
+  return
+
+/* ---------------------------------------------------------------------
+   boot: nil, true, false, the kernel classes with their object kinds
+   --------------------------------------------------------------------- */
+boot: procedure = .void
+  tbl = .string
+  e = .string
+  i = .int
+  c = .int
+  sup = .int
+  nm = .string
+  sp = .string
+  kd = .int
+  o = .int
+  /* special selectors first, so the S_ constants are their ids */
+  do i = 1 to words(selboot)
+    c = selid(word(selboot, i))
+  end
+  o = newobj(0, KD_PLAIN, 0)
+  o = newobj(0, KD_PLAIN, 0)
+  o = newobj(0, KD_PLAIN, 0)
+  tbl = "Object/-/0 Behavior/Object/0 ClassDescription/Behavior/0 Class/ClassDescription/0"
+  tbl = tbl || " Metaclass/ClassDescription/0 Boolean/Object/0 True/Boolean/0 False/Boolean/0"
+  tbl = tbl || " UndefinedObject/Object/0 Magnitude/Object/0 Character/Magnitude/5 Number/Magnitude/0"
+  tbl = tbl || " Integer/Number/0 SmallInteger/Integer/0 LargeInteger/Integer/7"
+  tbl = tbl || " LargePositiveInteger/LargeInteger/7 LargeNegativeInteger/LargeInteger/7"
+  tbl = tbl || " Float/Number/3 FloatD/Float/3 Fraction/Number/0 LookupKey/Magnitude/0 Association/LookupKey/0"
+  tbl = tbl || " Collection/Object/0 SequenceableCollection/Collection/0 ArrayedCollection/SequenceableCollection/0"
+  tbl = tbl || " Array/ArrayedCollection/4 CharacterArray/ArrayedCollection/0 String/CharacterArray/1 Symbol/String/2"
+  tbl = tbl || " OrderedCollection/SequenceableCollection/0 SortedCollection/OrderedCollection/0"
+  tbl = tbl || " Interval/ArrayedCollection/0 HashedCollection/Collection/0"
+  tbl = tbl || " Dictionary/HashedCollection/8 IdentityDictionary/Dictionary/8 Set/HashedCollection/8"
+  tbl = tbl || " IdentitySet/Set/8 Bag/HashedCollection/0 BlockClosure/Object/6 Message/Object/0"
+  tbl = tbl || " Stream/Object/0 PositionableStream/Stream/0 ReadStream/PositionableStream/0"
+  tbl = tbl || " WriteStream/PositionableStream/0 ReadWriteStream/WriteStream/0 TextCollector/Stream/0"
+  tbl = tbl || " SystemDictionary/Object/0 Point/Object/0 Random/Object/0 Date/Magnitude/0 Time/Magnitude/0"
+  tbl = tbl || " Signal/Object/0 Exception/Signal/0 Error/Exception/0 Warning/Exception/0"
+  tbl = tbl || " ArithmeticError/Error/0 ZeroDivide/ArithmeticError/0 MessageNotUnderstood/Error/0"
+  tbl = tbl || " InvalidValue/Error/0 InvalidArgument/InvalidValue/0 IndexOutOfRange/InvalidArgument/0"
+  tbl = tbl || " NotFound/InvalidArgument/0 EmptyCollection/Error/0 WrongClass/InvalidValue/0"
+  tbl = tbl || " InvalidReturn/Error/0 UserInterrupt/Exception/0 ExceptionSet/Object/0"
+  do i = 1 to words(tbl)
+    e = word(tbl, i)
+    parse var e nm "/" sp "/" kd
+    if sp == "-" then sup = 0
+    else sup = find_class(sp)
+    c = define_class(nm, sup)
+    c_kind[c] = kd
+    if nm == "Class" then do
+      cls_Class = c
+      c_super[c_meta[cmap["Object"]]] = c
+    end
+    if nm == "Metaclass" then cls_Metaclass = c
+  end
+  do i = 1 to nc
+    if c_ismeta[i] = 1 then o_cls[c_oop[i] % 2] = cls_Metaclass
+  end
+  cls_Object = find_class("Object")
+  cls_String = find_class("String")
+  cls_Symbol = find_class("Symbol")
+  cls_Float = find_class("FloatD")
+  cls_Character = find_class("Character")
+  cls_Array = find_class("Array")
+  cls_SmallInteger = find_class("SmallInteger")
+  cls_LargePositiveInteger = find_class("LargePositiveInteger")
+  cls_LargeNegativeInteger = find_class("LargeNegativeInteger")
+  cls_BlockClosure = find_class("BlockClosure")
+  cls_UndefinedObject = find_class("UndefinedObject")
+  cls_Message = find_class("Message")
+  o_cls[1] = cls_UndefinedObject
+  o_cls[2] = find_class("True")
+  o_cls[3] = find_class("False")
+  call gset "nil", nil_oop
+  call gset "true", true_oop
+  call gset "false", false_oop
+  o = newobj(find_class("SystemDictionary"), KD_PLAIN, 0)
+  call gset "Smalltalk", o
+  o = newobj(find_class("TextCollector"), KD_PLAIN, 0)
+  call gset "Transcript", o
+  return

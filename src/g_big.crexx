@@ -1,0 +1,361 @@
+
+/* ---------------------------------------------------------------------
+   Arbitrary-precision integers on decimal strings
+   --------------------------------------------------------------------- */
+mag_clean: procedure = .string
+  arg s = .string
+  p = .int
+  p = verify(s, "0", "N")
+  if p = 0 then return "0"
+  return substr(s, p)
+
+mag_cmp: procedure = .int
+  arg a = .string, b = .string
+  if length(a) < length(b) then return -1
+  if length(a) > length(b) then return 1
+  if a == b then return 0
+  if a << b then return -1
+  return 1
+
+mag_add: procedure = .string
+  arg a = .string, b = .string
+  r = .string
+  i = .int
+  j = .int
+  x = .int
+  y = .int
+  c = .int
+  s = .int
+  piece = .string
+  i = length(a)
+  j = length(b)
+  c = 0
+  r = ""
+  do while i > 0 | j > 0 | c > 0
+    x = 0
+    y = 0
+    if i > 0 then do
+      if i > 9 then x = substr(a, i - 8, 9) as .int
+      else x = substr(a, 1, i) as .int
+      i = i - 9
+    end
+    if j > 0 then do
+      if j > 9 then y = substr(b, j - 8, 9) as .int
+      else y = substr(b, 1, j) as .int
+      j = j - 9
+    end
+    s = x + y + c
+    if s >= 1000000000 then do
+      s = s - 1000000000
+      c = 1
+    end
+    else c = 0
+    piece = s as .string
+    if i > 0 | j > 0 | c > 0 then piece = right(copies("0", 9) || piece, 9)
+    r = piece || r
+  end
+  return mag_clean(r)
+
+/* a >= b */
+mag_sub: procedure = .string
+  arg a = .string, b = .string
+  r = .string
+  i = .int
+  j = .int
+  x = .int
+  y = .int
+  c = .int
+  s = .int
+  piece = .string
+  i = length(a)
+  j = length(b)
+  c = 0
+  r = ""
+  do while i > 0
+    if i > 9 then x = substr(a, i - 8, 9) as .int
+    else x = substr(a, 1, i) as .int
+    i = i - 9
+    y = 0
+    if j > 0 then do
+      if j > 9 then y = substr(b, j - 8, 9) as .int
+      else y = substr(b, 1, j) as .int
+      j = j - 9
+    end
+    s = x - y - c
+    if s < 0 then do
+      s = s + 1000000000
+      c = 1
+    end
+    else c = 0
+    piece = s as .string
+    if i > 0 then piece = right(copies("0", 9) || piece, 9)
+    r = piece || r
+  end
+  return mag_clean(r)
+
+mag_mul: procedure = .string
+  arg a = .string, b = .string
+  la = .int
+  lb = .int
+  i = .int
+  j = .int
+  k = .int
+  x = .int
+  c = .int
+  t = .int
+  r = .string
+  piece = .string
+  al0 = .int[]
+  bl0 = .int[]
+  rl = .int[]
+  if a == "0" | b == "0" then return "0"
+  la = 0
+  i = length(a)
+  do while i > 0
+    la = la + 1
+    if i > 9 then al0[la] = substr(a, i - 8, 9) as .int
+    else al0[la] = substr(a, 1, i) as .int
+    i = i - 9
+  end
+  lb = 0
+  i = length(b)
+  do while i > 0
+    lb = lb + 1
+    if i > 9 then bl0[lb] = substr(b, i - 8, 9) as .int
+    else bl0[lb] = substr(b, 1, i) as .int
+    i = i - 9
+  end
+  do k = 1 to la + lb
+    rl[k] = 0
+  end
+  do i = 1 to la
+    c = 0
+    x = al0[i]
+    do j = 1 to lb
+      t = x * bl0[j] + rl[i + j - 1] + c
+      c = t % 1000000000
+      rl[i + j - 1] = t // 1000000000
+    end
+    k = i + lb
+    do while c > 0
+      t = rl[k] + c
+      c = t % 1000000000
+      rl[k] = t // 1000000000
+      k = k + 1
+    end
+  end
+  k = la + lb
+  do while k > 1 & rl[k] = 0
+    k = k - 1
+  end
+  r = rl[k] as .string
+  do i = k - 1 to 1 by -1
+    piece = rl[i] as .string
+    r = r || right(copies("0", 9) || piece, 9)
+  end
+  return mag_clean(r)
+
+/* truncated division of magnitudes: quotient in bq, remainder in brm */
+mag_divmod: procedure = .void
+  arg a = .string, b = .string
+  i = .int
+  r = .string
+  q = .string
+  d = .int
+  qd = .int
+  if mag_cmp(a, b) < 0 then do
+    bq = "0"
+    brm = a
+    return
+  end
+  r = "0"
+  q = ""
+  do i = 1 to length(a)
+    r = mag_clean(r || substr(a, i, 1))
+    qd = 0
+    do while mag_cmp(r, b) >= 0
+      r = mag_sub(r, b)
+      qd = qd + 1
+    end
+    q = q || qd
+  end
+  bq = mag_clean(q)
+  brm = r
+  return
+
+/* signed string helpers: s is "123" or "-123" */
+sgn_split: procedure = .void
+  arg s = .string
+  if left(s, 1) == "-" then do
+    sg = -1
+    mg = substr(s, 2)
+  end
+  else do
+    sg = 1
+    mg = s
+  end
+  return
+
+sgn_make: procedure = .string
+  arg sgv = .int, mgv = .string
+  if mgv == "0" then return "0"
+  if sgv < 0 then return "-" || mgv
+  return mgv
+
+sadd: procedure = .string
+  arg a = .string, b = .string
+  sa = .int
+  sb = .int
+  ma = .string
+  mb = .string
+  c = .int
+  call sgn_split a
+  sa = sg
+  ma = mg
+  call sgn_split b
+  sb = sg
+  mb = mg
+  if sa = sb then return sgn_make(sa, mag_add(ma, mb))
+  c = mag_cmp(ma, mb)
+  if c = 0 then return "0"
+  if c > 0 then return sgn_make(sa, mag_sub(ma, mb))
+  return sgn_make(sb, mag_sub(mb, ma))
+
+sneg: procedure = .string
+  arg a = .string
+  if a == "0" then return "0"
+  if left(a, 1) == "-" then return substr(a, 2)
+  return "-" || a
+
+ssub: procedure = .string
+  arg a = .string, b = .string
+  return sadd(a, sneg(b))
+
+smul: procedure = .string
+  arg a = .string, b = .string
+  sa = .int
+  sb = .int
+  ma = .string
+  mb = .string
+  call sgn_split a
+  sa = sg
+  ma = mg
+  call sgn_split b
+  sb = sg
+  mb = mg
+  return sgn_make(sa * sb, mag_mul(ma, mb))
+
+/* truncated quotient and remainder: results in sq, sr */
+sdivmod: procedure = .void
+  arg a = .string, b = .string
+  sa = .int
+  sb = .int
+  ma = .string
+  mb = .string
+  call sgn_split a
+  sa = sg
+  ma = mg
+  call sgn_split b
+  sb = sg
+  mb = mg
+  call mag_divmod ma, mb
+  sq = sgn_make(sa * sb, bq)
+  sr = sgn_make(sa, brm)
+  return
+
+scmp: procedure = .int
+  arg a = .string, b = .string
+  sa = .int
+  sb = .int
+  ma = .string
+  mb = .string
+  call sgn_split a
+  sa = sg
+  ma = mg
+  call sgn_split b
+  sb = sg
+  mb = mg
+  if ma == "0" then sa = 0
+  if mb == "0" then sb = 0
+  if sa < sb then return -1
+  if sa > sb then return 1
+  if sa = 0 then return 0
+  if sa > 0 then return mag_cmp(ma, mb)
+  return mag_cmp(mb, ma)
+
+/* decimal string of an integer oop (small or large) */
+num_str: procedure = .string
+  arg x = .int
+  if x // 2 \= 0 then return intval(x) as .string
+  return o_s[x % 2]
+
+/* oop for an integer given as a decimal string */
+big_norm: procedure = .int
+  arg s0 = .string
+  s = .string
+  neg = .int
+  o = .int
+  s = s0
+  neg = 0
+  if left(s, 1) == "-" then do
+    neg = 1
+    s = substr(s, 2)
+  end
+  s = mag_clean(s)
+  if length(s) <= 18 then do
+    if neg = 1 then return mkint(0 - (s as .int))
+    return mkint(s as .int)
+  end
+  if neg = 1 then s = "-" || s
+  return mkbig(s)
+
+mkbig: procedure = .int
+  arg s = .string
+  o = .int
+  if length(s) <= 18 & left(s, 1) \== "-" then return mkint(s as .int)
+  if length(s) <= 19 & left(s, 1) == "-" then return mkint(0 - (substr(s, 2) as .int))
+  if left(s, 1) == "-" then o = newobj(cls_LargeNegativeInteger, KD_BIG, 0)
+  else o = newobj(cls_LargePositiveInteger, KD_BIG, 0)
+  o_s[o % 2] = s
+  return o
+
+big_float: procedure = .float
+  arg s = .string
+  return s as .float
+
+/* a float with a large magnitude -> integer string */
+float_to_istr: procedure = .string
+  arg x = .float
+  s = .string
+  p = .int
+  e = .int
+  m = .string
+  neg = .int
+  d = .int
+  neg = 0
+  if x < 0.0 then do
+    neg = 1
+    x = 0.0 - x
+  end
+  s = upper(x as .string)
+  p = pos("E", s)
+  if p = 0 then do
+    d = pos(".", s)
+    if d > 0 then s = left(s, d - 1)
+    return sgn_make2(neg, s)
+  end
+  e = substr(s, p + 1) as .int
+  m = left(s, p - 1)
+  d = pos(".", m)
+  if d > 0 then do
+    e = e - (length(m) - d)
+    m = left(m, d - 1) || substr(m, d + 1)
+  end
+  if e >= 0 then m = m || copies("0", e)
+  else m = left(m, max(length(m) + e, 1))
+  return sgn_make2(neg, mag_clean(m))
+
+sgn_make2: procedure = .string
+  arg neg = .int, m = .string
+  if m == "0" | neg = 0 then return m
+  return "-" || m

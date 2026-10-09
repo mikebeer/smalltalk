@@ -1,0 +1,891 @@
+
+/* ---------------------------------------------------------------------
+   Lexer
+   --------------------------------------------------------------------- */
+isletter: procedure = .int
+  arg c = .string
+  if c == "" then return 0
+  if c >>= "a" & c <<= "z" then return 1
+  if c >>= "A" & c <<= "Z" then return 1
+  if c == "_" then return 1
+  return 0
+
+isdigit: procedure = .int
+  arg c = .string
+  if c == "" then return 0
+  if c >>= "0" & c <<= "9" then return 1
+  return 0
+
+isbinch: procedure = .int
+  arg c = .string
+  if c == "" then return 0
+  if pos(c, "+-*/\<>=~@%|&?,") > 0 then return 1
+  return 0
+
+line_of: procedure = .int
+  arg p = .int
+  n = .int
+  i = .int
+  n = 1
+  i = pos('0a'x, txt)
+  do while i > 0 & i < p
+    n = n + 1
+    i = pos('0a'x, txt, i + 1)
+  end
+  return n
+
+perr: procedure = .void
+  arg msg = .string
+  if pe = 0 then do
+    pe = 1
+    call outs "Parse error (" || src_name || " line " || line_of(tp) || "): " || msg || '0a'x
+  end
+  return
+
+/* scan the next token into lx_* */
+lex_token: procedure = .void
+  c = .string
+  d = .string
+  p = .int
+  q = .int
+  s = .string
+  radix = .int
+  v = .int
+  ok = .int
+  dg = .string
+  fr = .string
+  ex = .string
+  isf = .int
+  startp = .int
+ do forever
+    if tp > tlen then leave
+    c = substr(txt, tp, 1)
+    if c == " " | c == '09'x | c == '0a'x | c == '0d'x | c == '0c'x then tp = tp + 1
+    else if c == '"' then do
+      q = pos('"', txt, tp + 1)
+      if q = 0 then tp = tlen + 1
+      else tp = q + 1
+    end
+    else leave
+  end
+  lx_s = ""
+  lx_i = 0
+  lx_f = 0.0
+  lx_p = tp
+  if tp > tlen then do
+    lx_t = TK_EOF
+    return
+  end
+  c = substr(txt, tp, 1)
+  if isletter(c) = 1 then do
+    q = tp
+    do while q <= tlen & (isletter(substr(txt, q, 1)) = 1 | isdigit(substr(txt, q, 1)) = 1)
+      q = q + 1
+    end
+    /* namespace dots:  Foo.Bar */
+    do while q < tlen & substr(txt, q, 1) == "." & isletter(substr(txt, q + 1, 1)) = 1 & substr(txt, tp, 1) >>= "A" & substr(txt, tp, 1) <<= "Z" & substr(txt, q + 1, 1) >>= "A" & substr(txt, q + 1, 1) <<= "Z"
+      q = q + 1
+      do while q <= tlen & (isletter(substr(txt, q, 1)) = 1 | isdigit(substr(txt, q, 1)) = 1)
+        q = q + 1
+      end
+    end
+    s = substr(txt, tp, q - tp)
+    if substr(txt, q, 1) == ":" & substr(txt, q + 1, 1) \== "=" then do
+      lx_t = TK_KW
+      lx_s = s || ":"
+      tp = q + 1
+      return
+    end
+    lx_t = TK_IDENT
+    p = lastpos(".", s)
+    if p > 0 then s = substr(s, p + 1)
+    lx_s = s
+    tp = q
+    return
+  end
+  if isdigit(c) = 1 then do
+    call lex_number
+    return
+  end
+  if c == "'" then do
+    s = ""
+    q = tp + 1
+    do forever
+      p = pos("'", txt, q)
+      if p = 0 then do
+        s = s || substr(txt, q)
+        tp = tlen + 1
+        leave
+      end
+      s = s || substr(txt, q, p - q)
+      if substr(txt, p + 1, 1) == "'" then do
+        s = s || "'"
+        q = p + 2
+      end
+      else do
+        tp = p + 1
+        leave
+      end
+    end
+    lx_t = TK_STR
+    lx_s = s
+    return
+  end
+  if c == "$" then do
+    lx_t = TK_CHAR
+    lx_i = c2d(substr(txt, tp + 1, 1))
+    tp = tp + 2
+    return
+  end
+  if c == "#" then do
+    d = substr(txt, tp + 1, 1)
+    if d == "(" then do
+      lx_t = TK_HLP
+      tp = tp + 2
+      return
+    end
+    if d == "[" then do
+      lx_t = TK_HLB
+      tp = tp + 2
+      return
+    end
+    if d == "'" then do
+      tp = tp + 1
+      call lex_token
+      lx_t = TK_SYM
+      return
+    end
+    if d == "#" then do
+      tp = tp + 1
+      call lex_token
+      return
+    end
+    if isletter(d) = 1 then do
+      q = tp + 1
+      do while q <= tlen & (isletter(substr(txt, q, 1)) = 1 | isdigit(substr(txt, q, 1)) = 1 | substr(txt, q, 1) == ":" | (substr(txt, q, 1) == "." & isletter(substr(txt, q + 1, 1)) = 1))
+        q = q + 1
+      end
+      lx_t = TK_SYM
+      lx_s = substr(txt, tp + 1, q - tp - 1)
+      tp = q
+      return
+    end
+    if isbinch(d) = 1 then do
+      q = tp + 1
+      do while q <= tlen & isbinch(substr(txt, q, 1)) = 1
+        q = q + 1
+      end
+      lx_t = TK_SYM
+      lx_s = substr(txt, tp + 1, q - tp - 1)
+      tp = q
+      return
+    end
+    lx_t = TK_BIN
+    lx_s = "#"
+    tp = tp + 1
+    return
+  end
+  tp = tp + 1
+  select
+    when c == ":" then do
+      if substr(txt, tp, 1) == "=" then do
+        tp = tp + 1
+        lx_t = TK_ASSIGN
+      end
+      else lx_t = TK_COLON
+      return
+    end
+    when c == "^" then lx_t = TK_CARET
+    when c == "(" then lx_t = TK_LP
+    when c == ")" then lx_t = TK_RP
+    when c == "[" then lx_t = TK_LB
+    when c == "]" then lx_t = TK_RB
+    when c == "{" then lx_t = TK_LC
+    when c == "}" then lx_t = TK_RC
+    when c == "." then lx_t = TK_DOT
+    when c == ";" then lx_t = TK_SEMI
+    when c == "!" then lx_t = TK_BANG
+    otherwise do
+      lx_t = TK_BIN
+      s = c
+      do while tp <= tlen & isbinch(substr(txt, tp, 1)) = 1
+        s = s || substr(txt, tp, 1)
+        tp = tp + 1
+      end
+      if length(s) > 1 & right(s, 1) == "-" & isdigit(substr(txt, tp, 1)) = 1 then do
+        s = left(s, length(s) - 1)
+        tp = tp - 1
+      end
+      lx_s = s
+    end
+  end
+  return
+
+lex_number: procedure = .void
+  q = .int
+  p = .int
+  dg = .string
+  fr = .string
+  ex = .string
+  radix = .int
+  v = .int
+  c = .string
+  isf = .int
+  neg = .int
+  q = tp
+  do while q <= tlen & isdigit(substr(txt, q, 1)) = 1
+    q = q + 1
+  end
+  dg = substr(txt, tp, q - tp)
+  if substr(txt, q, 1) == "r" & (isdigit(substr(txt, q + 1, 1)) = 1 | (substr(txt, q + 1, 1) >>= "A" & substr(txt, q + 1, 1) <<= "Z")) then do
+    radix = dg as .int
+    q = q + 1
+    v = 0
+    do while q <= tlen
+      c = substr(txt, q, 1)
+      if isdigit(c) = 1 then p = c as .int
+      else if c >>= "A" & c <<= "Z" then p = c2d(c) - 55
+      else leave
+      if p >= radix then leave
+      v = v * radix + p
+      q = q + 1
+    end
+    lx_t = TK_INT
+    lx_i = v
+    tp = q
+    return
+  end
+  fr = ""
+  isf = 0
+  if substr(txt, q, 1) == "." & isdigit(substr(txt, q + 1, 1)) = 1 then do
+    isf = 1
+    p = q + 1
+    do while p <= tlen & isdigit(substr(txt, p, 1)) = 1
+      p = p + 1
+    end
+    fr = substr(txt, q + 1, p - q - 1)
+    q = p
+  end
+  ex = ""
+  c = substr(txt, q, 1)
+  if c == "e" | c == "d" | c == "q" then do
+    p = q + 1
+    neg = 0
+    if substr(txt, p, 1) == "-" then do
+      neg = 1
+      p = p + 1
+    end
+    if isdigit(substr(txt, p, 1)) = 1 then do
+      v = p
+      do while v <= tlen & isdigit(substr(txt, v, 1)) = 1
+        v = v + 1
+      end
+      ex = substr(txt, p, v - p)
+      if neg = 1 then do
+        ex = "-" || ex
+        isf = 1
+      end
+      q = v
+    end
+  end
+  /* scaled decimal 1.5s2 : treated as float */
+  if substr(txt, q, 1) == "s" & isdigit(substr(txt, q + 1, 1)) = 1 & isf = 1 then do
+    q = q + 1
+    do while q <= tlen & isdigit(substr(txt, q, 1)) = 1
+      q = q + 1
+    end
+  end
+  tp = q
+  if isf = 1 then do
+    lx_t = TK_FLOAT
+    if fr == "" then fr = "0"
+    if ex == "" then lx_f = (dg || "." || fr) as .float
+    else lx_f = (dg || "." || fr || "E" || ex) as .float
+    return
+  end
+  if ex \== "" & ex \== "0" then dg = dg || copies("0", ex as .int)
+  if length(dg) > 18 then do
+    lx_t = TK_BIGINT
+    lx_s = dg
+    return
+  end
+  lx_t = TK_INT
+  lx_i = dg as .int
+  return
+
+/* token stream with one token of lookahead */
+advance: procedure = .void
+  if pk_have = 1 then do
+    tk = pk_t
+    ts = pk_s
+    ti = pk_i
+    tf = pk_f
+    tpos = pk_p
+    pk_have = 0
+  end
+  else do
+    call lex_token
+    tk = lx_t
+    ts = lx_s
+    ti = lx_i
+    tf = lx_f
+    tpos = lx_p
+  end
+  return
+
+peek_tok: procedure = .void
+  if pk_have = 0 then do
+    call lex_token
+    pk_t = lx_t
+    pk_s = lx_s
+    pk_i = lx_i
+    pk_f = lx_f
+    pk_p = lx_p
+    pk_have = 1
+  end
+  return
+
+/* save / restore the whole lexer state (for backtracking) */
+lex_mark: procedure = .int
+  nmk = nmk + 1
+  mk_tp[nmk] = tp
+  mk_t[nmk] = tk
+  mk_s[nmk] = ts
+  mk_i[nmk] = ti
+  mk_f[nmk] = tf
+  mk_p[nmk] = tpos
+  mk_h[nmk] = pk_have
+  mk_pt[nmk] = pk_t
+  mk_ps[nmk] = pk_s
+  mk_pi[nmk] = pk_i
+  mk_pf[nmk] = pk_f
+  mk_pp[nmk] = pk_p
+  return nmk
+
+lex_reset: procedure = .void
+  arg m = .int
+  tp = mk_tp[m]
+  tk = mk_t[m]
+  ts = mk_s[m]
+  ti = mk_i[m]
+  tf = mk_f[m]
+  tpos = mk_p[m]
+  pk_have = mk_h[m]
+  pk_t = mk_pt[m]
+  pk_s = mk_ps[m]
+  pk_i = mk_pi[m]
+  pk_f = mk_pf[m]
+  pk_p = mk_pp[m]
+  nmk = m - 1
+  return
+
+lex_drop: procedure = .void
+  arg m = .int
+  nmk = m - 1
+  return
+
+/* ---------------------------------------------------------------------
+   Raw syntax tree
+   --------------------------------------------------------------------- */
+nd: procedure = .int
+  arg t = .int, a = .int, b = .int, c = .int, d = .int, i = .int, s = .string
+  nnode = nnode + 1
+  nt[nnode] = t
+  n_a[nnode] = a
+  n_b[nnode] = b
+  n_c[nnode] = c
+  n_d[nnode] = d
+  n_i[nnode] = i
+  n_s[nnode] = s
+  return nnode
+
+isbin: procedure = .int
+  arg s = .string
+  if tk = TK_BIN & ts == s then return 1
+  return 0
+
+/* statements until the closing token; returns an ND_SEQ node */
+parse_stmts: procedure = .int
+  arg endt = .int
+  first = .int
+  n = .int
+  st = .int
+  tmp = .int[]
+  n = 0
+  do forever
+    do while tk = TK_DOT
+      call advance
+    end
+    if tk = endt | tk = TK_EOF | pe = 1 then leave
+    if endt = TK_RB & tk = TK_BANG then leave
+    st = parse_statement()
+    n = n + 1
+    tmp[n] = st
+    if tk = TK_DOT then call advance
+    else leave
+  end
+  first = nal + 1
+  do st = 1 to n
+    nal = nal + 1
+    al[nal] = tmp[st]
+  end
+  return nd(ND_SEQ, first, n, 0, 0, 0, "")
+
+parse_statement: procedure = .int
+  e = .int
+  if tk = TK_CARET then do
+    call advance
+    e = parse_expr()
+    return nd(ND_RRET, e, 0, 0, 0, 0, "")
+  end
+  return parse_expr()
+
+parse_expr: procedure = .int
+  nme = .string
+  e = .int
+  if tk = TK_IDENT then do
+    call peek_tok
+    if pk_t = TK_ASSIGN then do
+      nme = ts
+      call advance
+      call advance
+      e = parse_expr()
+      return nd(ND_RASG, e, 0, 0, 0, 0, nme)
+    end
+  end
+  e = parse_keyword_expr()
+  if tk = TK_SEMI then e = parse_cascade(e)
+  return e
+
+parse_cascade: procedure = .int
+  arg e0 = .int
+  rcv = .int
+  first = .int
+  n = .int
+  m = .int
+  tmp = .int[]
+  if nt[e0] \= ND_RSEND then do
+    call perr "cascade needs a message send"
+    return e0
+  end
+  rcv = n_a[e0]
+  /* the first message is the one already parsed */
+  n = 1
+  tmp[1] = nd(ND_RMSG, 0, n_b[e0], 0, n_d[e0], n_i[e0], n_s[e0])
+  do while tk = TK_SEMI & pe = 0
+    call advance
+    n = n + 1
+    tmp[n] = parse_msg_part()
+  end
+  first = nal + 1
+  do m = 1 to n
+    nal = nal + 1
+    al[nal] = tmp[m]
+  end
+  return nd(ND_RCASC, rcv, first, n, 0, 0, "")
+
+/* one message (unary, binary or keyword) without a receiver */
+parse_msg_part: procedure = .int
+  a = .int
+  sel = .string
+  first = .int
+  n = .int
+  m = .int
+  tmp = .int[]
+  if tk = TK_IDENT then do
+    sel = ts
+    call advance
+    return nd(ND_RMSG, 0, 0, 0, 0, 0, sel)
+  end
+  if tk = TK_BIN then do
+    sel = ts
+    call advance
+    a = parse_unary_expr()
+    first = nal + 1
+    nal = nal + 1
+    al[nal] = a
+    return nd(ND_RMSG, 0, first, 0, 0, 1, sel)
+  end
+  if tk = TK_KW then do
+    sel = ""
+    n = 0
+    do while tk = TK_KW & pe = 0
+      sel = sel || ts
+      call advance
+      n = n + 1
+      tmp[n] = parse_binary_expr()
+    end
+    first = nal + 1
+    do m = 1 to n
+      nal = nal + 1
+      al[nal] = tmp[m]
+    end
+    return nd(ND_RMSG, 0, first, 0, 0, n, sel)
+  end
+  call perr "bad cascade message"
+  return nd(ND_RMSG, 0, 0, 0, 0, 0, "yourself")
+
+parse_keyword_expr: procedure = .int
+  rcv = .int
+  sel = .string
+  first = .int
+  n = .int
+  m = .int
+  sup = .int
+  tmp = .int[]
+  rcv = parse_binary_expr()
+  if tk \= TK_KW then return rcv
+  sup = n_d[rcv]
+  if nt[rcv] = ND_RVAR & n_s[rcv] == "super" then sup = 1
+  sel = ""
+  n = 0
+  do while tk = TK_KW & pe = 0
+    sel = sel || ts
+    call advance
+    n = n + 1
+    tmp[n] = parse_binary_expr()
+  end
+  first = nal + 1
+  do m = 1 to n
+    nal = nal + 1
+    al[nal] = tmp[m]
+  end
+  return mk_send(rcv, sel, first, n)
+
+mk_send: procedure = .int
+  arg rcv = .int, sel = .string, first = .int, n = .int
+  sup = .int
+  sup = 0
+  if nt[rcv] = ND_RVAR & n_s[rcv] == "super" then sup = 1
+  return nd(ND_RSEND, rcv, first, 0, sup, n, sel)
+
+parse_binary_expr: procedure = .int
+  rcv = .int
+  a = .int
+  sel = .string
+  first = .int
+  rcv = parse_unary_expr()
+  do while tk = TK_BIN & pe = 0
+    sel = ts
+    call advance
+    a = parse_unary_expr()
+    first = nal + 1
+    nal = nal + 1
+    al[nal] = a
+    rcv = mk_send(rcv, sel, first, 1)
+  end
+  return rcv
+
+parse_unary_expr: procedure = .int
+  rcv = .int
+  rcv = parse_primary()
+  do while tk = TK_IDENT & pe = 0
+    call peek_tok
+    if pk_t = TK_ASSIGN then leave
+    rcv = mk_send(rcv, ts, 0, 0)
+    call advance
+  end
+  return rcv
+
+parse_primary: procedure = .int
+  s = .string
+  e = .int
+  t = .int
+  o = .int
+  if tk = TK_IDENT then do
+    s = ts
+    call advance
+    if s == "nil" then return nd(ND_LIT, nil_oop, 0, 0, 0, 0, "")
+    if s == "true" then return nd(ND_LIT, true_oop, 0, 0, 0, 0, "")
+    if s == "false" then return nd(ND_LIT, false_oop, 0, 0, 0, 0, "")
+    if s == "thisContext" then return nd(ND_THISCTX, 0, 0, 0, 0, 0, "")
+    return nd(ND_RVAR, 0, 0, 0, 0, 0, s)
+  end
+  if tk = TK_INT then do
+    o = mkint(ti)
+    call advance
+    return nd(ND_LIT, o, 0, 0, 0, 0, "")
+  end
+  if tk = TK_BIGINT then do
+    o = mkbig(ts)
+    call advance
+    return nd(ND_LIT, o, 0, 0, 0, 0, "")
+  end
+  if tk = TK_FLOAT then do
+    o = mkfloat(tf)
+    call advance
+    return nd(ND_LIT, o, 0, 0, 0, 0, "")
+  end
+  if tk = TK_STR then do
+    o = mkstr(ts)
+    call advance
+    return nd(ND_LIT, o, 0, 0, 0, 0, "")
+  end
+  if tk = TK_SYM then do
+    o = mksym(ts)
+    call advance
+    return nd(ND_LIT, o, 0, 0, 0, 0, "")
+  end
+  if tk = TK_CHAR then do
+    o = mkchar(ti)
+    call advance
+    return nd(ND_LIT, o, 0, 0, 0, 0, "")
+  end
+  if tk = TK_HLP then do
+    call advance
+    o = parse_litarray()
+    return nd(ND_LIT, o, 0, 0, 0, 0, "")
+  end
+  if tk = TK_HLB then do
+    call advance
+    o = parse_bytearray()
+    return nd(ND_LIT, o, 0, 0, 0, 0, "")
+  end
+  if tk = TK_LP then do
+    call advance
+    e = parse_expr()
+    if tk = TK_RP then call advance
+    else call perr "missing )"
+    return e
+  end
+  if tk = TK_LB then return parse_block()
+  if tk = TK_LC then return parse_brace()
+  if tk = TK_BIN & ts == "-" then do
+    /* negative literal */
+    call peek_tok
+    if pk_t = TK_INT | pk_t = TK_FLOAT | pk_t = TK_BIGINT then do
+      if pk_p = tpos + 1 then do
+        call advance
+        if tk = TK_INT then o = mkint(0 - ti)
+        else if tk = TK_FLOAT then o = mkfloat(0.0 - tf)
+        else o = mkbig("-" || ts)
+        call advance
+        return nd(ND_LIT, o, 0, 0, 0, 0, "")
+      end
+    end
+  end
+  call perr "expression expected, found '" || ts || "'"
+  call advance
+  return nd(ND_LIT, nil_oop, 0, 0, 0, 0, "")
+
+parse_brace: procedure = .int
+  first = .int
+  n = .int
+  m = .int
+  e = .int
+  tmp = .int[]
+  call advance
+  n = 0
+  do forever
+    do while tk = TK_DOT
+      call advance
+    end
+    if tk = TK_RC | tk = TK_EOF | pe = 1 then leave
+    e = parse_expr()
+    n = n + 1
+    tmp[n] = e
+    if tk = TK_DOT then call advance
+    else leave
+  end
+  if tk = TK_RC then call advance
+  else call perr "missing }"
+  first = nal + 1
+  do m = 1 to n
+    nal = nal + 1
+    al[nal] = tmp[m]
+  end
+  return nd(ND_BRACE, first, n, 0, 0, 0, "")
+
+/* literal array contents after #( or ( */
+parse_litarray: procedure = .int
+  n = .int
+  m = .int
+  o = .int
+  arr = .int
+  v = .int
+  tmp = .int[]
+  n = 0
+  do forever
+    if tk = TK_RP | tk = TK_EOF | pe = 1 then leave
+    v = parse_litelem()
+    n = n + 1
+    tmp[n] = v
+  end
+  if tk = TK_RP then call advance
+  else call perr "missing ) in literal array"
+  arr = mkarray(n)
+  do m = 1 to n
+    call slot_put arr, m - 1, tmp[m]
+  end
+  return arr
+
+parse_litelem: procedure = .int
+  o = .int
+  s = .string
+  if tk = TK_INT then do
+    o = mkint(ti)
+    call advance
+    return o
+  end
+  if tk = TK_BIGINT then do
+    o = mkbig(ts)
+    call advance
+    return o
+  end
+  if tk = TK_FLOAT then do
+    o = mkfloat(tf)
+    call advance
+    return o
+  end
+  if tk = TK_STR then do
+    o = mkstr(ts)
+    call advance
+    return o
+  end
+  if tk = TK_SYM then do
+    o = mksym(ts)
+    call advance
+    return o
+  end
+  if tk = TK_CHAR then do
+    o = mkchar(ti)
+    call advance
+    return o
+  end
+  if tk = TK_HLP | tk = TK_LP then do
+    call advance
+    return parse_litarray()
+  end
+  if tk = TK_HLB | tk = TK_LB then do
+    call advance
+    return parse_bytearray()
+  end
+  if tk = TK_LC then do
+    call advance
+    return parse_litarray2()
+  end
+  if tk = TK_IDENT then do
+    s = ts
+    call advance
+    if s == "nil" then return nil_oop
+    if s == "true" then return true_oop
+    if s == "false" then return false_oop
+    return mksym(s)
+  end
+  if tk = TK_KW then do
+    s = ts
+    call advance
+    do while tk = TK_KW
+      s = s || ts
+      call advance
+    end
+    return mksym(s)
+  end
+  if tk = TK_BIN then do
+    s = ts
+    call advance
+    if s == "-" & (tk = TK_INT | tk = TK_FLOAT) then do
+      if tk = TK_INT then o = mkint(0 - ti)
+      else o = mkfloat(0.0 - tf)
+      call advance
+      return o
+    end
+    return mksym(s)
+  end
+  call perr "bad literal array element"
+  call advance
+  return nil_oop
+
+parse_litarray2: procedure = .int
+  /* {...} inside a literal array: treated as an array of its elements until } */
+  n = .int
+  m = .int
+  arr = .int
+  v = .int
+  tmp = .int[]
+  n = 0
+  do while tk \= TK_RC & tk \= TK_EOF & pe = 0
+    v = parse_litelem()
+    n = n + 1
+    tmp[n] = v
+  end
+  if tk = TK_RC then call advance
+  arr = mkarray(n)
+  do m = 1 to n
+    call slot_put arr, m - 1, tmp[m]
+  end
+  return arr
+
+parse_bytearray: procedure = .int
+  n = .int
+  m = .int
+  arr = .int
+  tmp = .int[]
+  n = 0
+  do while tk = TK_INT
+    n = n + 1
+    tmp[n] = mkint(ti)
+    call advance
+  end
+  if tk = TK_RB then call advance
+  else call perr "missing ] in byte array"
+  arr = mkarray(n)
+  do m = 1 to n
+    call slot_put arr, m - 1, tmp[m]
+  end
+  return arr
+
+/* [ :a :b | | t | stmts ] */
+parse_block: procedure = .int
+  np = .int
+  nt2 = .int
+  first_p = .int
+  first_t = .int
+  body = .int
+  call advance
+  np = 0
+  first_p = nnl + 1
+  do while tk = TK_COLON
+    call advance
+    if tk = TK_IDENT then do
+      nnl = nnl + 1
+      nl_name[nnl] = ts
+      np = np + 1
+      call advance
+    end
+    else call perr "block parameter name expected"
+  end
+  if np > 0 then do
+    if isbin("|") = 1 then call advance
+    else if isbin("||") = 1 then do
+      /* [:a || t | ...]  -- the second bar opens a temporaries list */
+      ts = "|"
+    end
+    else if tk \= TK_RB then call perr "| expected after block parameters"
+  end
+  first_t = nnl + 1
+  nt2 = parse_temps()
+  body = parse_stmts(TK_RB)
+  if tk = TK_RB then call advance
+  else call perr "missing ]"
+  return nd(ND_RBLOCK, body, first_p, np, first_t, nt2, "")
+
+/* | a b c |  (returns the count; names are appended to nl_name) */
+parse_temps: procedure = .int
+  n = .int
+  n = 0
+  do while isbin("|") = 1 | isbin("||") = 1
+    if isbin("||") = 1 then call advance
+    else do
+      call advance
+      do while tk = TK_IDENT
+        nnl = nnl + 1
+        nl_name[nnl] = ts
+        n = n + 1
+        call advance
+      end
+      if isbin("|") = 1 then call advance
+      else call perr "| expected after temporaries"
+    end
+  end
+  return n

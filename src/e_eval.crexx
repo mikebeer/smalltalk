@@ -1,0 +1,639 @@
+
+/* ---------------------------------------------------------------------
+   Frames
+   --------------------------------------------------------------------- */
+alloc_frame: procedure = .int
+  arg size = .int
+  fb = .int
+  fb = fl_head[size]
+  if fb > 0 then do
+    fl_head[size] = vp[fb]
+    return fb
+  end
+  fb = nvp + 1
+  nvp = nvp + size
+  return fb
+
+free_frame: procedure = .void
+  arg fb = .int, size = .int
+  vp[fb] = fl_head[size]
+  fl_head[size] = fb
+  return
+
+init_temps: procedure = .void
+  arg base = .int, n = .int
+  i = .int
+  do i = 0 to n - 1
+    vp[base + i] = nil_oop
+  end
+  return
+
+/* ---------------------------------------------------------------------
+   Sending messages
+   --------------------------------------------------------------------- */
+trace_line: procedure = .string
+  arg m = .int, r = .int
+  rc = .int
+  rc = cof(r)
+  if rc = m_cls[m] then return c_name[rc] || ">>" || sel_name[m_sel[m]]
+  return c_name[rc] || "(" || c_name[m_cls[m]] || ")>>" || sel_name[m_sel[m]]
+
+print_trace: procedure = .void
+  i = .int
+  sg0 = .int
+  mc = .int
+  sg0 = find_class("Signal")
+  do i = cdepth to 1 by -1
+    mc = m_cls[cs_m[i]]
+    if c_ismeta[mc] = 1 then mc = c_this[mc]
+    if sg0 = 0 | inherits(mc, sg0) = 0 then call outs trace_line(cs_m[i], cs_r[i]) || '0a'x
+  end
+  call outs "UndefinedObject>>executeStatements" || '0a'x
+  return
+
+/* report an error as a Smalltalk Error (signal) with the given text */
+st_error: procedure = .void
+  arg rcv = .int, msg = .string
+  base = .int
+  r = .int
+  base = asp
+  asp = asp + 1
+  ast[asp] = mkstr(msg)
+  r = send_sel(rcv, S_ERROR, base, 1)
+  asp = base
+  return
+
+/* perform a send whose arguments are already at ast[base+1 .. base+na] */
+send_sel: procedure = .int
+  arg rcv = .int, sel = .int, base = .int, na = .int
+  m = .int
+  c = .int
+  c = cof(rcv)
+  m = lookup(c, sel)
+  if m = 0 then return send_dnu(rcv, sel, base, na)
+  return invoke(m, rcv, base, na)
+
+send_dnu: procedure = .int
+  arg rcv = .int, sel = .int, base = .int, na = .int
+  msg = .int
+  arr = .int
+  i = .int
+  m = .int
+  b2 = .int
+  if in_dnu > 50 then do
+    call outs "doesNotUnderstand: recursion for #" || sel_name[sel] || '0a'x
+    unw = UW_ABORT
+    return 0
+  end
+  arr = mkarray(na)
+  do i = 1 to na
+    call slot_put arr, i - 1, ast[base + i]
+  end
+  msg = newobj(cls_Message, KD_PLAIN, 2)
+  call slot_put msg, 0, mksym(sel_name[sel])
+  call slot_put msg, 1, arr
+  m = lookup(cof(rcv), S_DNU)
+  if m = 0 then do
+    call outs "Object: " || printstr0(rcv) || " error: did not understand #" || sel_name[sel] || '0a'x
+    unw = UW_ABORT
+    return 0
+  end
+  b2 = asp
+  asp = asp + 1
+  ast[asp] = msg
+  in_dnu = in_dnu + 1
+  i = invoke(m, rcv, b2, 1)
+  in_dnu = in_dnu - 1
+  asp = b2
+  return i
+
+printstr0: procedure = .string
+  arg x = .int
+  k = .int
+  if x // 2 \= 0 then return intval(x) as .string
+  k = o_kind[x % 2]
+  if k = KD_STR then return "'" || o_s[x % 2] || "'"
+  if k = KD_SYM then return "#" || o_s[x % 2]
+  if x = nil_oop then return "nil"
+  if x = true_oop then return "true"
+  if x = false_oop then return "false"
+  if k = KD_CLS | k = KD_META then return c_name[o_x[x % 2]]
+  return "a " || c_name[o_cls[x % 2]]
+
+/* run method m for receiver rcv with args at ast[base+1..base+na] */
+invoke: procedure = .int
+  arg m = .int, rcv = .int, base = .int, na = .int
+  p = .int
+  r = .int
+  nf = .int
+  size = .int
+  i = .int
+  body = .int
+  nt0 = .int
+  p = m_prim[m]
+  if p > 0 then do
+    r = prim(p, rcv, base, na)
+    if unw > 0 then return 0
+    if r \= 0 then return r
+    if n_b[m_body[m]] = 0 then do
+      call st_error rcv, "primitive failed: " || sel_name[m_sel[m]]
+      return 0
+    end
+  end
+  nt0 = m_ntemps[m]
+  size = 4 + nt0
+  nf = alloc_frame(size)
+  vp[nf] = 0
+  vp[nf + 1] = nf
+  vp[nf + 2] = rcv
+  vp[nf + 3] = m
+  do i = 1 to m_nargs[m]
+    vp[nf + 3 + i] = ast[base + i]
+  end
+  do i = m_nargs[m] + 1 to nt0
+    vp[nf + 3 + i] = nil_oop
+  end
+  cdepth = cdepth + 1
+  if cdepth > 20000 then do
+    call outs "call stack too deep" || '0a'x
+    cdepth = cdepth - 1
+    unw = UW_ABORT
+    return 0
+  end
+  cs_m[cdepth] = m
+  cs_r[cdepth] = rcv
+  r = ev(m_body[m], nf)
+  cdepth = cdepth - 1
+  if unw = UW_RET & unw_t = nf then do
+    unw = UW_NONE
+    r = unw_v
+  end
+  else if unw = UW_NONE then r = rcv
+  else r = 0
+  if m_hasblk[m] = 0 then call free_frame nf, size
+  else vp[nf + 1] = 0
+  return r
+
+/* ---------------------------------------------------------------------
+   Blocks
+   --------------------------------------------------------------------- */
+call_block: procedure = .int
+  arg blk = .int, base = .int, na = .int
+  node = .int
+  outer = .int
+  size = .int
+  bf = .int
+  i = .int
+  r = .int
+  node = o_x[blk % 2]
+  if n_b[node] \= na then do
+    call st_error blk, "wrong argument count"
+    return 0
+  end
+  outer = o_slot[blk % 2]
+  size = 4 + n_c[node]
+  bf = alloc_frame(size)
+  vp[bf] = outer
+  vp[bf + 1] = vp[outer + 1]
+  vp[bf + 2] = vp[outer + 2]
+  vp[bf + 3] = vp[outer + 3]
+  do i = 1 to na
+    vp[bf + 3 + i] = ast[base + i]
+  end
+  do i = na + 1 to n_c[node]
+    vp[bf + 3 + i] = nil_oop
+  end
+  r = ev(n_a[node], bf)
+  if n_d[node] = 0 then call free_frame bf, size
+  if unw > 0 then return 0
+  return r
+
+/* value of a block with no arguments */
+block0: procedure = .int
+  arg blk = .int
+  return call_block(blk, asp, 0)
+
+/* ---------------------------------------------------------------------
+   The evaluator
+   --------------------------------------------------------------------- */
+ev: procedure = .int
+  arg n = .int, fb = .int
+  t = .int
+  d = .int
+  f = .int
+  v = .int
+  i = .int
+  c = .int
+  lim = .int
+  t = nt[n]
+  select
+    when t = ND_LOCAL then do
+      d = n_a[n]
+      f = fb
+      do while d > 0
+        f = vp[f]
+        d = d - 1
+      end
+      return vp[f + 4 + n_b[n]]
+    end
+    when t = ND_SEND then return do_send(n, fb)
+    when t = ND_LIT then return n_a[n]
+    when t = ND_SELF then return vp[fb + 2]
+    when t = ND_IVAR then return sl[o_slot[vp[fb + 2] % 2] + n_a[n]]
+    when t = ND_GVAR then return g_val[n_a[n]]
+    when t = ND_ASGL then do
+      v = ev(n_c[n], fb)
+      if unw > 0 then return 0
+      d = n_a[n]
+      f = fb
+      do while d > 0
+        f = vp[f]
+        d = d - 1
+      end
+      vp[f + 4 + n_b[n]] = v
+      return v
+    end
+    when t = ND_ASGI then do
+      v = ev(n_c[n], fb)
+      if unw > 0 then return 0
+      sl[o_slot[vp[fb + 2] % 2] + n_a[n]] = v
+      return v
+    end
+    when t = ND_ASGG then do
+      v = ev(n_c[n], fb)
+      if unw > 0 then return 0
+      g_val[n_a[n]] = v
+      return v
+    end
+    when t = ND_SEQ then do
+      v = nil_oop
+      f = n_a[n]
+      do i = f to f + n_b[n] - 1
+        v = ev(al[i], fb)
+        if unw > 0 then return 0
+      end
+      return v
+    end
+    when t = ND_RET then do
+      v = ev(n_a[n], fb)
+      if unw > 0 then return 0
+      f = vp[fb + 1]
+      if n_i[n] = 1 & (f = 0 | vp[f + 1] \= f) then do
+        call outs "BlockContext>>cannotReturn: non-local return from a dead method context" || '0a'x
+        unw = UW_ABORT
+        return 0
+      end
+      unw = UW_RET
+      unw_t = f
+      unw_v = v
+      return 0
+    end
+    when t = ND_IF then do
+      v = ev(n_a[n], fb)
+      if unw > 0 then return 0
+      if v = true_oop then do
+        if n_b[n] > 0 then return ev(n_b[n], fb)
+        return nil_oop
+      end
+      if v = false_oop then do
+        if n_c[n] > 0 then return ev(n_c[n], fb)
+        return nil_oop
+      end
+      return not_boolean(v, "ifTrue:")
+    end
+    when t = ND_WHILE then do
+      do forever
+        v = ev(n_a[n], fb)
+        if unw > 0 then return 0
+        if v = true_oop then c = 1
+        else if v = false_oop then c = 0
+        else return not_boolean(v, "whileTrue:")
+        if c \= n_i[n] then leave
+        if n_b[n] > 0 then do
+          v = ev(n_b[n], fb)
+          if unw > 0 then return 0
+        end
+      end
+      return nil_oop
+    end
+    when t = ND_AND | t = ND_OR then do
+      v = ev(n_a[n], fb)
+      if unw > 0 then return 0
+      if v = true_oop then do
+        if t = ND_AND then return ev(n_b[n], fb)
+        return true_oop
+      end
+      if v = false_oop then do
+        if t = ND_OR then return ev(n_b[n], fb)
+        return false_oop
+      end
+      return not_boolean(v, "and:")
+    end
+    when t = ND_TODO then return do_todo(n, fb)
+    when t = ND_TIMES then do
+      v = ev(n_a[n], fb)
+      if unw > 0 then return 0
+      if v // 2 = 0 then return not_number(v, "timesRepeat:")
+      lim = intval(v)
+      do i = 1 to lim
+        c = ev(n_b[n], fb)
+        if unw > 0 then return 0
+      end
+      return v
+    end
+    when t = ND_IFNIL then do
+      v = ev(n_a[n], fb)
+      if unw > 0 then return 0
+      if v = nil_oop then do
+        if n_b[n] > 0 then return ev(n_b[n], fb)
+        return nil_oop
+      end
+      if n_c[n] > 0 then do
+        if n_i[n] >= 0 then vp[fb + 4 + n_i[n]] = v
+        return ev(n_c[n], fb)
+      end
+      return v
+    end
+    when t = ND_REPEAT then do
+      do forever
+        v = ev(n_a[n], fb)
+        if unw > 0 then return 0
+      end
+      return nil_oop
+    end
+    when t = ND_CASC then return do_cascade(n, fb)
+    when t = ND_BLOCK then do
+      v = newobj(cls_BlockClosure, KD_BLK, 0)
+      o_x[v % 2] = n
+      o_slot[v % 2] = fb
+      return v
+    end
+    when t = ND_BRACE then do
+      c = n_b[n]
+      v = mkarray(c)
+      do i = 0 to c - 1
+        f = ev(al[n_a[n] + i], fb)
+        if unw > 0 then return 0
+        sl[o_slot[v % 2] + i] = f
+      end
+      return v
+    end
+    when t = ND_THISCTX then return nil_oop
+    otherwise nop
+  end
+  return nil_oop
+
+not_boolean: procedure = .int
+  arg v = .int, sel = .string
+  call st_error v, "doesNotUnderstand: #" || sel || " (receiver is not a Boolean)"
+  return 0
+
+not_number: procedure = .int
+  arg v = .int, sel = .string
+  call st_error v, "doesNotUnderstand: #" || sel
+  return 0
+
+do_todo: procedure = .int
+  arg n = .int, fb = .int
+  a = .int
+  b = .int
+  st = .int
+  x = .int
+  y = .int
+  s = .int
+  slot = .int
+  v = .int
+  r = .int
+  base = .int
+  a = ev(n_a[n], fb)
+  if unw > 0 then return 0
+  b = ev(n_b[n], fb)
+  if unw > 0 then return 0
+  if n_d[n] > 0 then do
+    st = ev(n_d[n], fb)
+    if unw > 0 then return 0
+  end
+  else st = mkint(1)
+  slot = fb + 4 + n_i[n]
+  if a // 2 \= 0 & b // 2 \= 0 & st // 2 \= 0 then do
+    x = intval(a)
+    y = intval(b)
+    s = intval(st)
+    if s = 0 then do
+      call st_error a, "step must be non-zero"
+      return 0
+    end
+    if s > 0 then do
+      do while x <= y
+        vp[slot] = mkint(x)
+        v = ev(n_c[n], fb)
+        if unw > 0 then return 0
+        x = x + s
+      end
+    end
+    else do
+      do while x >= y
+        vp[slot] = mkint(x)
+        v = ev(n_c[n], fb)
+        if unw > 0 then return 0
+        x = x + s
+      end
+    end
+    return a
+  end
+  /* general numbers: use sends */
+  base = asp
+  v = a
+  do forever
+    asp = base + 1
+    ast[asp] = b
+    if is_neg(st) = 0 then r = send_sel(v, S_LE, base, 1)
+    else r = send_sel(v, S_GE, base, 1)
+    asp = base
+    if unw > 0 then return 0
+    if r \= true_oop then leave
+    vp[slot] = v
+    r = ev(n_c[n], fb)
+    if unw > 0 then return 0
+    asp = base + 1
+    ast[asp] = st
+    v = send_sel(v, S_ADD, base, 1)
+    asp = base
+    if unw > 0 then return 0
+  end
+  return a
+
+is_neg: procedure = .int
+  arg x = .int
+  if x // 2 \= 0 then do
+    if intval(x) < 0 then return 1
+    return 0
+  end
+  if o_kind[x % 2] = KD_FLT then do
+    if o_f[x % 2] < 0.0 then return 1
+  end
+  return 0
+
+do_cascade: procedure = .int
+  arg n = .int, fb = .int
+  rcv = .int
+  i = .int
+  k = .int
+  j = .int
+  base = .int
+  v = .int
+  r = .int
+  f = .int
+  rcv = ev(n_a[n], fb)
+  if unw > 0 then return 0
+  r = nil_oop
+  do i = n_b[n] to n_b[n] + n_c[n] - 1
+    k = al[i]
+    base = asp
+    do j = 0 to n_i[k] - 1
+      v = ev(al[n_b[k] + j], fb)
+      if unw > 0 then do
+        asp = base
+        return 0
+      end
+      asp = asp + 1
+      ast[asp] = v
+    end
+    r = send_sel(rcv, n_c[k], base, n_i[k])
+    asp = base
+    if unw > 0 then return 0
+  end
+  return r
+
+do_send: procedure = .int
+  arg n = .int, fb = .int
+  rn = .int
+  sel = .int
+  na = .int
+  rcv = .int
+  c = .int
+  m = .int
+  i = .int
+  base = .int
+  v = .int
+  x = .int
+  y = .int
+  r = .int
+  f = .int
+  rn = n_a[n]
+  sel = n_c[n]
+  na = n_i[n]
+  if n_d[n] = 1 then do
+    rcv = vp[fb + 2]
+    c = c_super[m_cls[vp[fb + 3]]]
+    if c = 0 then c = cls_Object
+  end
+  else do
+    rcv = ev(rn, fb)
+    if unw > 0 then return 0
+    c = 0
+  end
+  base = asp
+  f = n_b[n]
+  do i = 0 to na - 1
+    v = ev(al[f + i], fb)
+    if unw > 0 then do
+      asp = base
+      return 0
+    end
+    asp = asp + 1
+    ast[asp] = v
+  end
+  /* fast paths for SmallInteger arithmetic and comparison */
+  if na = 1 & sel <= 14 then do
+    v = ast[asp]
+    if rcv // 2 \= 0 & v // 2 \= 0 then do
+      x = intval(rcv)
+      y = intval(v)
+      select
+        when sel = S_ADD then do
+          r = x + y
+          if r > -1000000000000000000 & r < 1000000000000000000 then do
+            asp = base
+            return r * 2 + 1
+          end
+        end
+        when sel = S_SUB then do
+          r = x - y
+          if r > -1000000000000000000 & r < 1000000000000000000 then do
+            asp = base
+            return r * 2 + 1
+          end
+        end
+        when sel = S_MUL then do
+          if x > -1000000000 & x < 1000000000 & y > -1000000000 & y < 1000000000 then do
+            asp = base
+            return (x * y) * 2 + 1
+          end
+        end
+        when sel = S_LT then do
+          asp = base
+          if x < y then return true_oop
+          return false_oop
+        end
+        when sel = S_GT then do
+          asp = base
+          if x > y then return true_oop
+          return false_oop
+        end
+        when sel = S_LE then do
+          asp = base
+          if x <= y then return true_oop
+          return false_oop
+        end
+        when sel = S_GE then do
+          asp = base
+          if x >= y then return true_oop
+          return false_oop
+        end
+        when sel = S_EQ then do
+          asp = base
+          if x = y then return true_oop
+          return false_oop
+        end
+        when sel = S_NE then do
+          asp = base
+          if x \= y then return true_oop
+          return false_oop
+        end
+        when sel = S_IDIV then do
+          if y \= 0 then do
+            r = x % y
+            if (x // y \= 0) & ((x < 0) \= (y < 0)) then r = r - 1
+            asp = base
+            return r * 2 + 1
+          end
+        end
+        when sel = S_MOD then do
+          if y \= 0 then do
+            r = x // y
+            if r \= 0 & ((r < 0) \= (y < 0)) then r = r + y
+            asp = base
+            return r * 2 + 1
+          end
+        end
+        otherwise nop
+      end
+    end
+    if sel = S_IDENT then do
+      asp = base
+      if rcv = v then return true_oop
+      return false_oop
+    end
+    if sel = S_NIDENT then do
+      asp = base
+      if rcv = v then return false_oop
+      return true_oop
+    end
+  end
+  if c = 0 then c = cof(rcv)
+  m = lookup(c, sel)
+  if m = 0 then r = send_dnu(rcv, sel, base, na)
+  else r = invoke(m, rcv, base, na)
+  asp = base
+  return r

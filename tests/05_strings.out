@@ -1,0 +1,88 @@
+12
+'HELLO, WORLD'
+'hello, world'
+'dlroW ,olleH'
+'dlroW ,olleH'
+$H
+$H
+$d
+'Hello'
+5
+3
+true
+true
+true
+'Hello, World!'
+'Hello, There'
+#'Hello, World'
+('Hello,' 'World' )
+('Hello' 'World' )
+12
+9
+'Hello, World'
+'''Hello, World'''
+14
+'it''s'
+it's
+4
+true
+true
+false
+'abd'
+3
+'abcdef'
+'abc'
+'trim me'
+'hello'
+'HELLO'
+'eo'
+$l
+($h $e $l $l $o )
+5
+OrderedCollection ($o $l $l $e $h )
+3
+'zz'
+''
+true
+42
+nil
+43
+'42'
+'42'
+'42'
+'3.5'
+'101010'
+'FF'
+'FF'
+'005'
+97
+$a
+$A
+true
+5
+$A
+Character value: 10
+$ 
+Character value: 9
+true
+true
+'hell0 w0rld'
+'hello!'
+('a' 'b' )
+13
+Object: 'abc' error: argument must be a string
+String(Object)>>error:
+String>><
+UndefinedObject>>executeStatements
+x is 3
+'jello'
+Object: #sym error: This method should not be called for instances of this class
+Symbol(Object)>>error:
+Symbol(Object)>>shouldNotImplement
+Symbol>>at:put:
+UndefinedObject>>executeStatements
+'tab	in'
+'ab'
+'a--b--c'
+'he'
+'llo'

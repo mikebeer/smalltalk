@@ -1,0 +1,4997 @@
+/* =========================================================================
+   SMALLTALK.CREXX  --  a Smalltalk-80 interpreter written in CREXX (Level B)
+
+   Usage:
+       crexx smalltalk.crexx -args [-L libdir] [file.st ...]
+   With no file the program is read from standard input.
+   ========================================================================= */
+options levelb numeric_classic
+import rxfnsb
+import rxfloat
+import _rxsysb
+namespace smalltalk expose rc_exit halted booted ob h_out h_in stdin_eof,
+   rnd_state prim_names selboot txt tp tlen pe src_name tk ts ti tf tpos,
+   lx_t lx_s lx_i lx_f lx_p pk_have pk_t pk_s pk_i pk_f pk_p nmk mk_tp mk_t,
+   mk_s mk_i mk_f mk_p mk_h mk_pt mk_ps mk_pi mk_pf mk_pp pm_prim pm_tfirst,
+   pm_ntemps nnl nl_name nnode nt n_a n_b n_c n_d n_i n_s nal al envn lvl,
+   env_name env_slot env_lvl sc_next sc_max sc_blk r_cls r_ntemps r_hasblk,
+   ib_first ib_slot rv_kind rv_a rv_b no nsl o_cls o_kind o_n o_slot o_x,
+   o_s o_f sl symtab chr_oop nil_oop true_oop false_oop nc c_name c_ivn,
+   c_super c_meta c_ismeta c_this c_kind c_ninst c_oop cmap cvmap,
+   cls_Object cls_Class cls_Metaclass cls_String cls_Symbol cls_Float,
+   cls_Character cls_Array cls_SmallInteger cls_LargePositiveInteger,
+   cls_LargeNegativeInteger cls_BlockClosure cls_UndefinedObject,
+   cls_Message nmeth m_sel m_cls m_nargs m_body m_ntemps m_hasblk m_prim,
+   m_src cm lk lkg gen ng gmap g_val g_name nsel selmap sel_name sel_n nvp,
+   vp fl_head asp ast cdepth cs_m cs_r in_dnu unw unw_t unw_v htop hid,
+   sigcount h_cls h_blk h_id nd0 ne dd_head dd_tail dd_n de_key de_val,
+   de_next de_live dmap bq brm sg mg sq sr
+
+arg av = .string[]
+call init
+libdir = "lib"
+nfiles = 0
+files = .string[]
+utxt = ""
+ia = 1
+do while ia <= av.0
+  oa = av[ia]
+  if oa == "-L" & ia < av.0 then do
+    ia = ia + 1
+    libdir = av[ia]
+  end
+  else if oa == "-h" | oa == "--help" then do
+    say "usage: smalltalk [-L libdir] [file.st ...]"
+    exit 0
+  end
+  else do
+    nfiles = nfiles + 1
+    files[nfiles] = oa
+  end
+  ia = ia + 1
+end
+call boot
+libs = "kernel.st numbers.st collections.st streams.st exceptions.st"
+do ia = 1 to words(libs)
+  lf = libdir || "/" || word(libs, ia)
+  ltxt = read_file(lf)
+  if ltxt == "" then do
+    say "smalltalk: cannot read library file" lf
+    exit 2
+  end
+  call file_in ltxt, word(libs, ia)
+end
+cls_Message = find_class("Message")
+booted = 1
+if nfiles = 0 then do
+  do forever
+    ul = read_stdin_line()
+    if ul = 0 then leave
+    utxt = utxt || o_s[ul % 2] || '0a'x
+  end
+  call file_in utxt, "stdin"
+end
+else do
+  do ia = 1 to nfiles
+    utxt = read_file(files[ia])
+    if utxt == "" then do
+      call outs "smalltalk: cannot read " || files[ia] || '0a'x
+      rc_exit = 1
+    end
+    else call file_in utxt, files[ia]
+    if halted = 1 then leave
+  end
+end
+call flush_out
+exit rc_exit
+
+/* ---------------------------------------------------------------------
+   Output
+   --------------------------------------------------------------------- */
+outs: procedure = .void
+  arg s = .string
+  ob = ob || s
+  if length(ob) > 3000 then call flush_out
+  return
+
+flush_out: procedure = .void
+  rcx = .int
+  if length(ob) > 0 then do
+    assembler fwrite h_out, ob
+    ob = ""
+  end
+  assembler fflush rcx, h_out
+  return
+
+/* ---------------------------------------------------------------------
+   init: declare and initialise all shared state
+   --------------------------------------------------------------------- */
+init: procedure = .void
+  rc_exit = 0
+  halted = 0
+  booted = 0
+  ob = ""
+  h_out = _open("stdout", "w")
+  h_in = _open("stdin", "r")
+  stdin_eof = 0
+  rnd_state = 12345
+  prim_names = "add sub mul div idiv mod quo rem lt gt le ge eq ne ident nident class basicSize basicAt basicAtPut instVarAt instVarAtPut identityHash perform performWithArgs isKindOf isMemberOf respondsTo shallowCopy basicNew basicNewSize floatOp truncated floor ceiling rounded asFloat bitAnd bitOr bitXor bitShift printString printRadix isInteger isFloat isString isSymbol isCharacter isNumber sqrtFloor strSize strAt strAtPut strCat strCopy strEq strLt strHash asSymbol asString upper lower strIndexOf strReplaceAll asNumber strTrim strSplit strReverse strNew charValue charFrom arrNew arrAt arrAtPut arrSize arrCopy arrFill arrReplace dictNew dictAt dictAtPut dictHas dictRemove dictKeys dictValues dictSize dictCopy blockValue blockValueArgs blockNumArgs whileTrue whileFalse onDo ensure ifCurtailed signal resume return retry pass outer retryUsing className superclass subclassNamed addInstVar instanceVariableNames selectors includesSelector basicNewClass compile addClassVar lookupSelector subclasses category globalAt globalAtPut globalHas transcript stdinLine stdinAtEnd msecs halt exit dnuArgs isNil evaluate displayString allSymbols excInfo bigOp floatPrint random strFind strCompare asStringOf secs format"
+  selboot = "+ - * / // \\ < > <= >= = ~= == ~~ , value value: value:value: value:value:value: value:value:value:value: doesNotUnderstand: printString displayString printOn: hash signal defaultAction new initialize size at: at:put: do: isKindOf: messageText description next atEnd class isNil notNil lessOrEqual: -> key printString: displayNl printNl executeStatements mustBeBoolean error:"
+  /* ---- lexer / parser ---- */
+  txt = ""
+  tp = 1
+  tlen = 0
+  pe = 0
+  src_name = ""
+  tk = 0
+  ts = ""
+  ti = 0
+  tf = 0.0
+  tpos = 0
+  lx_t = 0
+  lx_s = ""
+  lx_i = 0
+  lx_f = 0.0
+  lx_p = 0
+  pk_have = 0
+  pk_t = 0
+  pk_s = ""
+  pk_i = 0
+  pk_f = 0.0
+  pk_p = 0
+  nmk = 0
+  mk_tp = .int[]
+  mk_t = .int[]
+  mk_s = .string[]
+  mk_i = .int[]
+  mk_f = .float[]
+  mk_p = .int[]
+  mk_h = .int[]
+  mk_pt = .int[]
+  mk_ps = .string[]
+  mk_pi = .int[]
+  mk_pf = .float[]
+  mk_pp = .int[]
+  pm_prim = 0
+  pm_tfirst = 0
+  pm_ntemps = 0
+  nnl = 0
+  nl_name = .string[]
+  /* ---- nodes ---- */
+  nnode = 0
+  nt = .int[]
+  n_a = .int[]
+  n_b = .int[]
+  n_c = .int[]
+  n_d = .int[]
+  n_i = .int[]
+  n_s = .string[]
+  nal = 0
+  al = .int[]
+  /* ---- resolver ---- */
+  envn = 0
+  lvl = 0
+  env_name = .string[]
+  env_slot = .int[]
+  env_lvl = .int[]
+  sc_next = .int[]
+  sc_max = .int[]
+  sc_blk = .int[]
+  r_cls = 0
+  r_ntemps = 0
+  r_hasblk = 0
+  ib_first = 0
+  ib_slot = 0
+  rv_kind = 0
+  rv_a = 0
+  rv_b = 0
+  /* ---- objects ---- */
+  no = 0
+  nsl = 0
+  o_cls = .int[]
+  o_kind = .int[]
+  o_n = .int[]
+  o_slot = .int[]
+  o_x = .int[]
+  o_s = .string[]
+  o_f = .float[]
+  sl = .int[]
+  symtab = .stem()
+  chr_oop = .int[]
+  chr_oop[256] = 0
+  nil_oop = 2
+  true_oop = 4
+  false_oop = 6
+  /* ---- classes ---- */
+  nc = 0
+  c_name = .string[]
+  c_ivn = .string[]
+  c_super = .int[]
+  c_meta = .int[]
+  c_ismeta = .int[]
+  c_this = .int[]
+  c_kind = .int[]
+  c_ninst = .int[]
+  c_oop = .int[]
+  cmap = .stem()
+  cvmap = .stem()
+  cls_Object = 0
+  cls_Class = 0
+  cls_Metaclass = 0
+  cls_String = 0
+  cls_Symbol = 0
+  cls_Float = 0
+  cls_Character = 0
+  cls_Array = 0
+  cls_SmallInteger = 0
+  cls_LargePositiveInteger = 0
+  cls_LargeNegativeInteger = 0
+  cls_BlockClosure = 0
+  cls_UndefinedObject = 0
+  cls_Message = 0
+  /* ---- methods ---- */
+  nmeth = 0
+  m_sel = .int[]
+  m_cls = .int[]
+  m_nargs = .int[]
+  m_body = .int[]
+  m_ntemps = .int[]
+  m_hasblk = .int[]
+  m_prim = .int[]
+  m_src = .int[]
+  cm = .int[]
+  lk = .int[]
+  lkg = .int[]
+  gen = 1
+  /* ---- globals, selectors ---- */
+  ng = 0
+  gmap = .stem()
+  g_val = .int[]
+  g_name = .string[]
+  nsel = 0
+  selmap = .stem()
+  sel_name = .string[]
+  sel_n = .int[]
+  /* ---- frames and stacks ---- */
+  nvp = 1
+  vp = .int[]
+  fl_head = .int[]
+  asp = 0
+  ast = .int[]
+  ast[20000] = 0
+  cdepth = 0
+  cs_m = .int[]
+  cs_r = .int[]
+  in_dnu = 0
+  /* ---- unwinding and handlers ---- */
+  unw = 0
+  unw_t = 0
+  unw_v = 0
+  htop = 0
+  hid = 0
+  sigcount = 0
+  h_cls = .int[]
+  h_blk = .int[]
+  h_id = .int[]
+  /* ---- dictionaries ---- */
+  nd0 = 0
+  ne = 0
+  dd_head = .int[]
+  dd_tail = .int[]
+  dd_n = .int[]
+  de_key = .int[]
+  de_val = .int[]
+  de_next = .int[]
+  de_live = .int[]
+  dmap = .stem()
+  /* ---- big integers ---- */
+  bq = ""
+  brm = ""
+  sg = 0
+  mg = ""
+  sq = ""
+  sr = ""
+  return
+
+/* ---------------------------------------------------------------------
+   boot: nil, true, false, the kernel classes with their object kinds
+   --------------------------------------------------------------------- */
+boot: procedure = .void
+  tbl = .string
+  e = .string
+  i = .int
+  c = .int
+  sup = .int
+  nm = .string
+  sp = .string
+  kd = .int
+  o = .int
+  /* special selectors first, so the S_ constants are their ids */
+  do i = 1 to words(selboot)
+    c = selid(word(selboot, i))
+  end
+  o = newobj(0, 0, 0)
+  o = newobj(0, 0, 0)
+  o = newobj(0, 0, 0)
+  tbl = "Object/-/0 Behavior/Object/0 ClassDescription/Behavior/0 Class/ClassDescription/0"
+  tbl = tbl || " Metaclass/ClassDescription/0 Boolean/Object/0 True/Boolean/0 False/Boolean/0"
+  tbl = tbl || " UndefinedObject/Object/0 Magnitude/Object/0 Character/Magnitude/5 Number/Magnitude/0"
+  tbl = tbl || " Integer/Number/0 SmallInteger/Integer/0 LargeInteger/Integer/7"
+  tbl = tbl || " LargePositiveInteger/LargeInteger/7 LargeNegativeInteger/LargeInteger/7"
+  tbl = tbl || " Float/Number/3 FloatD/Float/3 Fraction/Number/0 LookupKey/Magnitude/0 Association/LookupKey/0"
+  tbl = tbl || " Collection/Object/0 SequenceableCollection/Collection/0 ArrayedCollection/SequenceableCollection/0"
+  tbl = tbl || " Array/ArrayedCollection/4 CharacterArray/ArrayedCollection/0 String/CharacterArray/1 Symbol/String/2"
+  tbl = tbl || " OrderedCollection/SequenceableCollection/0 SortedCollection/OrderedCollection/0"
+  tbl = tbl || " Interval/ArrayedCollection/0 HashedCollection/Collection/0"
+  tbl = tbl || " Dictionary/HashedCollection/8 IdentityDictionary/Dictionary/8 Set/HashedCollection/8"
+  tbl = tbl || " IdentitySet/Set/8 Bag/HashedCollection/0 BlockClosure/Object/6 Message/Object/0"
+  tbl = tbl || " Stream/Object/0 PositionableStream/Stream/0 ReadStream/PositionableStream/0"
+  tbl = tbl || " WriteStream/PositionableStream/0 ReadWriteStream/WriteStream/0 TextCollector/Stream/0"
+  tbl = tbl || " SystemDictionary/Object/0 Point/Object/0 Random/Object/0 Date/Magnitude/0 Time/Magnitude/0"
+  tbl = tbl || " Signal/Object/0 Exception/Signal/0 Error/Exception/0 Warning/Exception/0"
+  tbl = tbl || " ArithmeticError/Error/0 ZeroDivide/ArithmeticError/0 MessageNotUnderstood/Error/0"
+  tbl = tbl || " InvalidValue/Error/0 InvalidArgument/InvalidValue/0 IndexOutOfRange/InvalidArgument/0"
+  tbl = tbl || " NotFound/InvalidArgument/0 EmptyCollection/Error/0 WrongClass/InvalidValue/0"
+  tbl = tbl || " InvalidReturn/Error/0 UserInterrupt/Exception/0 ExceptionSet/Object/0"
+  do i = 1 to words(tbl)
+    e = word(tbl, i)
+    parse var e nm "/" sp "/" kd
+    if sp == "-" then sup = 0
+    else sup = find_class(sp)
+    c = define_class(nm, sup)
+    c_kind[c] = kd
+    if nm == "Class" then do
+      cls_Class = c
+      c_super[c_meta[cmap["Object"]]] = c
+    end
+    if nm == "Metaclass" then cls_Metaclass = c
+  end
+  do i = 1 to nc
+    if c_ismeta[i] = 1 then o_cls[c_oop[i] % 2] = cls_Metaclass
+  end
+  cls_Object = find_class("Object")
+  cls_String = find_class("String")
+  cls_Symbol = find_class("Symbol")
+  cls_Float = find_class("FloatD")
+  cls_Character = find_class("Character")
+  cls_Array = find_class("Array")
+  cls_SmallInteger = find_class("SmallInteger")
+  cls_LargePositiveInteger = find_class("LargePositiveInteger")
+  cls_LargeNegativeInteger = find_class("LargeNegativeInteger")
+  cls_BlockClosure = find_class("BlockClosure")
+  cls_UndefinedObject = find_class("UndefinedObject")
+  cls_Message = find_class("Message")
+  o_cls[1] = cls_UndefinedObject
+  o_cls[2] = find_class("True")
+  o_cls[3] = find_class("False")
+  call gset "nil", nil_oop
+  call gset "true", true_oop
+  call gset "false", false_oop
+  o = newobj(find_class("SystemDictionary"), 0, 0)
+  call gset "Smalltalk", o
+  o = newobj(find_class("TextCollector"), 0, 0)
+  call gset "Transcript", o
+  return
+
+
+/* ---------------------------------------------------------------------
+   Lexer
+   --------------------------------------------------------------------- */
+isletter: procedure = .int
+  arg c = .string
+  if c == "" then return 0
+  if c >>= "a" & c <<= "z" then return 1
+  if c >>= "A" & c <<= "Z" then return 1
+  if c == "_" then return 1
+  return 0
+
+isdigit: procedure = .int
+  arg c = .string
+  if c == "" then return 0
+  if c >>= "0" & c <<= "9" then return 1
+  return 0
+
+isbinch: procedure = .int
+  arg c = .string
+  if c == "" then return 0
+  if pos(c, "+-*/\<>=~@%|&?,") > 0 then return 1
+  return 0
+
+line_of: procedure = .int
+  arg p = .int
+  n = .int
+  i = .int
+  n = 1
+  i = pos('0a'x, txt)
+  do while i > 0 & i < p
+    n = n + 1
+    i = pos('0a'x, txt, i + 1)
+  end
+  return n
+
+perr: procedure = .void
+  arg msg = .string
+  if pe = 0 then do
+    pe = 1
+    call outs "Parse error (" || src_name || " line " || line_of(tp) || "): " || msg || '0a'x
+  end
+  return
+
+/* scan the next token into lx_* */
+lex_token: procedure = .void
+  c = .string
+  d = .string
+  p = .int
+  q = .int
+  s = .string
+  radix = .int
+  v = .int
+  ok = .int
+  dg = .string
+  fr = .string
+  ex = .string
+  isf = .int
+  startp = .int
+ do forever
+    if tp > tlen then leave
+    c = substr(txt, tp, 1)
+    if c == " " | c == '09'x | c == '0a'x | c == '0d'x | c == '0c'x then tp = tp + 1
+    else if c == '"' then do
+      q = pos('"', txt, tp + 1)
+      if q = 0 then tp = tlen + 1
+      else tp = q + 1
+    end
+    else leave
+  end
+  lx_s = ""
+  lx_i = 0
+  lx_f = 0.0
+  lx_p = tp
+  if tp > tlen then do
+    lx_t = 0
+    return
+  end
+  c = substr(txt, tp, 1)
+  if isletter(c) = 1 then do
+    q = tp
+    do while q <= tlen & (isletter(substr(txt, q, 1)) = 1 | isdigit(substr(txt, q, 1)) = 1)
+      q = q + 1
+    end
+    /* namespace dots:  Foo.Bar */
+    do while q < tlen & substr(txt, q, 1) == "." & isletter(substr(txt, q + 1, 1)) = 1 & substr(txt, tp, 1) >>= "A" & substr(txt, tp, 1) <<= "Z" & substr(txt, q + 1, 1) >>= "A" & substr(txt, q + 1, 1) <<= "Z"
+      q = q + 1
+      do while q <= tlen & (isletter(substr(txt, q, 1)) = 1 | isdigit(substr(txt, q, 1)) = 1)
+        q = q + 1
+      end
+    end
+    s = substr(txt, tp, q - tp)
+    if substr(txt, q, 1) == ":" & substr(txt, q + 1, 1) \== "=" then do
+      lx_t = 2
+      lx_s = s || ":"
+      tp = q + 1
+      return
+    end
+    lx_t = 1
+    p = lastpos(".", s)
+    if p > 0 then s = substr(s, p + 1)
+    lx_s = s
+    tp = q
+    return
+  end
+  if isdigit(c) = 1 then do
+    call lex_number
+    return
+  end
+  if c == "'" then do
+    s = ""
+    q = tp + 1
+    do forever
+      p = pos("'", txt, q)
+      if p = 0 then do
+        s = s || substr(txt, q)
+        tp = tlen + 1
+        leave
+      end
+      s = s || substr(txt, q, p - q)
+      if substr(txt, p + 1, 1) == "'" then do
+        s = s || "'"
+        q = p + 2
+      end
+      else do
+        tp = p + 1
+        leave
+      end
+    end
+    lx_t = 6
+    lx_s = s
+    return
+  end
+  if c == "$" then do
+    lx_t = 8
+    lx_i = c2d(substr(txt, tp + 1, 1))
+    tp = tp + 2
+    return
+  end
+  if c == "#" then do
+    d = substr(txt, tp + 1, 1)
+    if d == "(" then do
+      lx_t = 21
+      tp = tp + 2
+      return
+    end
+    if d == "[" then do
+      lx_t = 22
+      tp = tp + 2
+      return
+    end
+    if d == "'" then do
+      tp = tp + 1
+      call lex_token
+      lx_t = 7
+      return
+    end
+    if d == "#" then do
+      tp = tp + 1
+      call lex_token
+      return
+    end
+    if isletter(d) = 1 then do
+      q = tp + 1
+      do while q <= tlen & (isletter(substr(txt, q, 1)) = 1 | isdigit(substr(txt, q, 1)) = 1 | substr(txt, q, 1) == ":" | (substr(txt, q, 1) == "." & isletter(substr(txt, q + 1, 1)) = 1))
+        q = q + 1
+      end
+      lx_t = 7
+      lx_s = substr(txt, tp + 1, q - tp - 1)
+      tp = q
+      return
+    end
+    if isbinch(d) = 1 then do
+      q = tp + 1
+      do while q <= tlen & isbinch(substr(txt, q, 1)) = 1
+        q = q + 1
+      end
+      lx_t = 7
+      lx_s = substr(txt, tp + 1, q - tp - 1)
+      tp = q
+      return
+    end
+    lx_t = 3
+    lx_s = "#"
+    tp = tp + 1
+    return
+  end
+  tp = tp + 1
+  select
+    when c == ":" then do
+      if substr(txt, tp, 1) == "=" then do
+        tp = tp + 1
+        lx_t = 9
+      end
+      else lx_t = 19
+      return
+    end
+    when c == "^" then lx_t = 10
+    when c == "(" then lx_t = 11
+    when c == ")" then lx_t = 12
+    when c == "[" then lx_t = 13
+    when c == "]" then lx_t = 14
+    when c == "{" then lx_t = 15
+    when c == "}" then lx_t = 16
+    when c == "." then lx_t = 17
+    when c == ";" then lx_t = 18
+    when c == "!" then lx_t = 20
+    otherwise do
+      lx_t = 3
+      s = c
+      do while tp <= tlen & isbinch(substr(txt, tp, 1)) = 1
+        s = s || substr(txt, tp, 1)
+        tp = tp + 1
+      end
+      if length(s) > 1 & right(s, 1) == "-" & isdigit(substr(txt, tp, 1)) = 1 then do
+        s = left(s, length(s) - 1)
+        tp = tp - 1
+      end
+      lx_s = s
+    end
+  end
+  return
+
+lex_number: procedure = .void
+  q = .int
+  p = .int
+  dg = .string
+  fr = .string
+  ex = .string
+  radix = .int
+  v = .int
+  c = .string
+  isf = .int
+  neg = .int
+  q = tp
+  do while q <= tlen & isdigit(substr(txt, q, 1)) = 1
+    q = q + 1
+  end
+  dg = substr(txt, tp, q - tp)
+  if substr(txt, q, 1) == "r" & (isdigit(substr(txt, q + 1, 1)) = 1 | (substr(txt, q + 1, 1) >>= "A" & substr(txt, q + 1, 1) <<= "Z")) then do
+    radix = dg as .int
+    q = q + 1
+    v = 0
+    do while q <= tlen
+      c = substr(txt, q, 1)
+      if isdigit(c) = 1 then p = c as .int
+      else if c >>= "A" & c <<= "Z" then p = c2d(c) - 55
+      else leave
+      if p >= radix then leave
+      v = v * radix + p
+      q = q + 1
+    end
+    lx_t = 4
+    lx_i = v
+    tp = q
+    return
+  end
+  fr = ""
+  isf = 0
+  if substr(txt, q, 1) == "." & isdigit(substr(txt, q + 1, 1)) = 1 then do
+    isf = 1
+    p = q + 1
+    do while p <= tlen & isdigit(substr(txt, p, 1)) = 1
+      p = p + 1
+    end
+    fr = substr(txt, q + 1, p - q - 1)
+    q = p
+  end
+  ex = ""
+  c = substr(txt, q, 1)
+  if c == "e" | c == "d" | c == "q" then do
+    p = q + 1
+    neg = 0
+    if substr(txt, p, 1) == "-" then do
+      neg = 1
+      p = p + 1
+    end
+    if isdigit(substr(txt, p, 1)) = 1 then do
+      v = p
+      do while v <= tlen & isdigit(substr(txt, v, 1)) = 1
+        v = v + 1
+      end
+      ex = substr(txt, p, v - p)
+      if neg = 1 then do
+        ex = "-" || ex
+        isf = 1
+      end
+      q = v
+    end
+  end
+  /* scaled decimal 1.5s2 : treated as float */
+  if substr(txt, q, 1) == "s" & isdigit(substr(txt, q + 1, 1)) = 1 & isf = 1 then do
+    q = q + 1
+    do while q <= tlen & isdigit(substr(txt, q, 1)) = 1
+      q = q + 1
+    end
+  end
+  tp = q
+  if isf = 1 then do
+    lx_t = 5
+    if fr == "" then fr = "0"
+    if ex == "" then lx_f = (dg || "." || fr) as .float
+    else lx_f = (dg || "." || fr || "E" || ex) as .float
+    return
+  end
+  if ex \== "" & ex \== "0" then dg = dg || copies("0", ex as .int)
+  if length(dg) > 18 then do
+    lx_t = 23
+    lx_s = dg
+    return
+  end
+  lx_t = 4
+  lx_i = dg as .int
+  return
+
+/* token stream with one token of lookahead */
+advance: procedure = .void
+  if pk_have = 1 then do
+    tk = pk_t
+    ts = pk_s
+    ti = pk_i
+    tf = pk_f
+    tpos = pk_p
+    pk_have = 0
+  end
+  else do
+    call lex_token
+    tk = lx_t
+    ts = lx_s
+    ti = lx_i
+    tf = lx_f
+    tpos = lx_p
+  end
+  return
+
+peek_tok: procedure = .void
+  if pk_have = 0 then do
+    call lex_token
+    pk_t = lx_t
+    pk_s = lx_s
+    pk_i = lx_i
+    pk_f = lx_f
+    pk_p = lx_p
+    pk_have = 1
+  end
+  return
+
+/* save / restore the whole lexer state (for backtracking) */
+lex_mark: procedure = .int
+  nmk = nmk + 1
+  mk_tp[nmk] = tp
+  mk_t[nmk] = tk
+  mk_s[nmk] = ts
+  mk_i[nmk] = ti
+  mk_f[nmk] = tf
+  mk_p[nmk] = tpos
+  mk_h[nmk] = pk_have
+  mk_pt[nmk] = pk_t
+  mk_ps[nmk] = pk_s
+  mk_pi[nmk] = pk_i
+  mk_pf[nmk] = pk_f
+  mk_pp[nmk] = pk_p
+  return nmk
+
+lex_reset: procedure = .void
+  arg m = .int
+  tp = mk_tp[m]
+  tk = mk_t[m]
+  ts = mk_s[m]
+  ti = mk_i[m]
+  tf = mk_f[m]
+  tpos = mk_p[m]
+  pk_have = mk_h[m]
+  pk_t = mk_pt[m]
+  pk_s = mk_ps[m]
+  pk_i = mk_pi[m]
+  pk_f = mk_pf[m]
+  pk_p = mk_pp[m]
+  nmk = m - 1
+  return
+
+lex_drop: procedure = .void
+  arg m = .int
+  nmk = m - 1
+  return
+
+/* ---------------------------------------------------------------------
+   Raw syntax tree
+   --------------------------------------------------------------------- */
+nd: procedure = .int
+  arg t = .int, a = .int, b = .int, c = .int, d = .int, i = .int, s = .string
+  nnode = nnode + 1
+  nt[nnode] = t
+  n_a[nnode] = a
+  n_b[nnode] = b
+  n_c[nnode] = c
+  n_d[nnode] = d
+  n_i[nnode] = i
+  n_s[nnode] = s
+  return nnode
+
+isbin: procedure = .int
+  arg s = .string
+  if tk = 3 & ts == s then return 1
+  return 0
+
+/* statements until the closing token; returns an 14 node */
+parse_stmts: procedure = .int
+  arg endt = .int
+  first = .int
+  n = .int
+  st = .int
+  tmp = .int[]
+  n = 0
+  do forever
+    do while tk = 17
+      call advance
+    end
+    if tk = endt | tk = 0 | pe = 1 then leave
+    if endt = 14 & tk = 20 then leave
+    st = parse_statement()
+    n = n + 1
+    tmp[n] = st
+    if tk = 17 then call advance
+    else leave
+  end
+  first = nal + 1
+  do st = 1 to n
+    nal = nal + 1
+    al[nal] = tmp[st]
+  end
+  return nd(14, first, n, 0, 0, 0, "")
+
+parse_statement: procedure = .int
+  e = .int
+  if tk = 10 then do
+    call advance
+    e = parse_expr()
+    return nd(45, e, 0, 0, 0, 0, "")
+  end
+  return parse_expr()
+
+parse_expr: procedure = .int
+  nme = .string
+  e = .int
+  if tk = 1 then do
+    call peek_tok
+    if pk_t = 9 then do
+      nme = ts
+      call advance
+      call advance
+      e = parse_expr()
+      return nd(41, e, 0, 0, 0, 0, nme)
+    end
+  end
+  e = parse_keyword_expr()
+  if tk = 18 then e = parse_cascade(e)
+  return e
+
+parse_cascade: procedure = .int
+  arg e0 = .int
+  rcv = .int
+  first = .int
+  n = .int
+  m = .int
+  tmp = .int[]
+  if nt[e0] \= 42 then do
+    call perr "cascade needs a message send"
+    return e0
+  end
+  rcv = n_a[e0]
+  /* the first message is the one already parsed */
+  n = 1
+  tmp[1] = nd(46, 0, n_b[e0], 0, n_d[e0], n_i[e0], n_s[e0])
+  do while tk = 18 & pe = 0
+    call advance
+    n = n + 1
+    tmp[n] = parse_msg_part()
+  end
+  first = nal + 1
+  do m = 1 to n
+    nal = nal + 1
+    al[nal] = tmp[m]
+  end
+  return nd(43, rcv, first, n, 0, 0, "")
+
+/* one message (unary, binary or keyword) without a receiver */
+parse_msg_part: procedure = .int
+  a = .int
+  sel = .string
+  first = .int
+  n = .int
+  m = .int
+  tmp = .int[]
+  if tk = 1 then do
+    sel = ts
+    call advance
+    return nd(46, 0, 0, 0, 0, 0, sel)
+  end
+  if tk = 3 then do
+    sel = ts
+    call advance
+    a = parse_unary_expr()
+    first = nal + 1
+    nal = nal + 1
+    al[nal] = a
+    return nd(46, 0, first, 0, 0, 1, sel)
+  end
+  if tk = 2 then do
+    sel = ""
+    n = 0
+    do while tk = 2 & pe = 0
+      sel = sel || ts
+      call advance
+      n = n + 1
+      tmp[n] = parse_binary_expr()
+    end
+    first = nal + 1
+    do m = 1 to n
+      nal = nal + 1
+      al[nal] = tmp[m]
+    end
+    return nd(46, 0, first, 0, 0, n, sel)
+  end
+  call perr "bad cascade message"
+  return nd(46, 0, 0, 0, 0, 0, "yourself")
+
+parse_keyword_expr: procedure = .int
+  rcv = .int
+  sel = .string
+  first = .int
+  n = .int
+  m = .int
+  sup = .int
+  tmp = .int[]
+  rcv = parse_binary_expr()
+  if tk \= 2 then return rcv
+  sup = n_d[rcv]
+  if nt[rcv] = 40 & n_s[rcv] == "super" then sup = 1
+  sel = ""
+  n = 0
+  do while tk = 2 & pe = 0
+    sel = sel || ts
+    call advance
+    n = n + 1
+    tmp[n] = parse_binary_expr()
+  end
+  first = nal + 1
+  do m = 1 to n
+    nal = nal + 1
+    al[nal] = tmp[m]
+  end
+  return mk_send(rcv, sel, first, n)
+
+mk_send: procedure = .int
+  arg rcv = .int, sel = .string, first = .int, n = .int
+  sup = .int
+  sup = 0
+  if nt[rcv] = 40 & n_s[rcv] == "super" then sup = 1
+  return nd(42, rcv, first, 0, sup, n, sel)
+
+parse_binary_expr: procedure = .int
+  rcv = .int
+  a = .int
+  sel = .string
+  first = .int
+  rcv = parse_unary_expr()
+  do while tk = 3 & pe = 0
+    sel = ts
+    call advance
+    a = parse_unary_expr()
+    first = nal + 1
+    nal = nal + 1
+    al[nal] = a
+    rcv = mk_send(rcv, sel, first, 1)
+  end
+  return rcv
+
+parse_unary_expr: procedure = .int
+  rcv = .int
+  rcv = parse_primary()
+  do while tk = 1 & pe = 0
+    call peek_tok
+    if pk_t = 9 then leave
+    rcv = mk_send(rcv, ts, 0, 0)
+    call advance
+  end
+  return rcv
+
+parse_primary: procedure = .int
+  s = .string
+  e = .int
+  t = .int
+  o = .int
+  if tk = 1 then do
+    s = ts
+    call advance
+    if s == "nil" then return nd(1, nil_oop, 0, 0, 0, 0, "")
+    if s == "true" then return nd(1, true_oop, 0, 0, 0, 0, "")
+    if s == "false" then return nd(1, false_oop, 0, 0, 0, 0, "")
+    if s == "thisContext" then return nd(16, 0, 0, 0, 0, 0, "")
+    return nd(40, 0, 0, 0, 0, 0, s)
+  end
+  if tk = 4 then do
+    o = mkint(ti)
+    call advance
+    return nd(1, o, 0, 0, 0, 0, "")
+  end
+  if tk = 23 then do
+    o = mkbig(ts)
+    call advance
+    return nd(1, o, 0, 0, 0, 0, "")
+  end
+  if tk = 5 then do
+    o = mkfloat(tf)
+    call advance
+    return nd(1, o, 0, 0, 0, 0, "")
+  end
+  if tk = 6 then do
+    o = mkstr(ts)
+    call advance
+    return nd(1, o, 0, 0, 0, 0, "")
+  end
+  if tk = 7 then do
+    o = mksym(ts)
+    call advance
+    return nd(1, o, 0, 0, 0, 0, "")
+  end
+  if tk = 8 then do
+    o = mkchar(ti)
+    call advance
+    return nd(1, o, 0, 0, 0, 0, "")
+  end
+  if tk = 21 then do
+    call advance
+    o = parse_litarray()
+    return nd(1, o, 0, 0, 0, 0, "")
+  end
+  if tk = 22 then do
+    call advance
+    o = parse_bytearray()
+    return nd(1, o, 0, 0, 0, 0, "")
+  end
+  if tk = 11 then do
+    call advance
+    e = parse_expr()
+    if tk = 12 then call advance
+    else call perr "missing )"
+    return e
+  end
+  if tk = 13 then return parse_block()
+  if tk = 15 then return parse_brace()
+  if tk = 3 & ts == "-" then do
+    /* negative literal */
+    call peek_tok
+    if pk_t = 4 | pk_t = 5 | pk_t = 23 then do
+      if pk_p = tpos + 1 then do
+        call advance
+        if tk = 4 then o = mkint(0 - ti)
+        else if tk = 5 then o = mkfloat(0.0 - tf)
+        else o = mkbig("-" || ts)
+        call advance
+        return nd(1, o, 0, 0, 0, 0, "")
+      end
+    end
+  end
+  call perr "expression expected, found '" || ts || "'"
+  call advance
+  return nd(1, nil_oop, 0, 0, 0, 0, "")
+
+parse_brace: procedure = .int
+  first = .int
+  n = .int
+  m = .int
+  e = .int
+  tmp = .int[]
+  call advance
+  n = 0
+  do forever
+    do while tk = 17
+      call advance
+    end
+    if tk = 16 | tk = 0 | pe = 1 then leave
+    e = parse_expr()
+    n = n + 1
+    tmp[n] = e
+    if tk = 17 then call advance
+    else leave
+  end
+  if tk = 16 then call advance
+  else call perr "missing }"
+  first = nal + 1
+  do m = 1 to n
+    nal = nal + 1
+    al[nal] = tmp[m]
+  end
+  return nd(15, first, n, 0, 0, 0, "")
+
+/* literal array contents after #( or ( */
+parse_litarray: procedure = .int
+  n = .int
+  m = .int
+  o = .int
+  arr = .int
+  v = .int
+  tmp = .int[]
+  n = 0
+  do forever
+    if tk = 12 | tk = 0 | pe = 1 then leave
+    v = parse_litelem()
+    n = n + 1
+    tmp[n] = v
+  end
+  if tk = 12 then call advance
+  else call perr "missing ) in literal array"
+  arr = mkarray(n)
+  do m = 1 to n
+    call slot_put arr, m - 1, tmp[m]
+  end
+  return arr
+
+parse_litelem: procedure = .int
+  o = .int
+  s = .string
+  if tk = 4 then do
+    o = mkint(ti)
+    call advance
+    return o
+  end
+  if tk = 23 then do
+    o = mkbig(ts)
+    call advance
+    return o
+  end
+  if tk = 5 then do
+    o = mkfloat(tf)
+    call advance
+    return o
+  end
+  if tk = 6 then do
+    o = mkstr(ts)
+    call advance
+    return o
+  end
+  if tk = 7 then do
+    o = mksym(ts)
+    call advance
+    return o
+  end
+  if tk = 8 then do
+    o = mkchar(ti)
+    call advance
+    return o
+  end
+  if tk = 21 | tk = 11 then do
+    call advance
+    return parse_litarray()
+  end
+  if tk = 22 | tk = 13 then do
+    call advance
+    return parse_bytearray()
+  end
+  if tk = 15 then do
+    call advance
+    return parse_litarray2()
+  end
+  if tk = 1 then do
+    s = ts
+    call advance
+    if s == "nil" then return nil_oop
+    if s == "true" then return true_oop
+    if s == "false" then return false_oop
+    return mksym(s)
+  end
+  if tk = 2 then do
+    s = ts
+    call advance
+    do while tk = 2
+      s = s || ts
+      call advance
+    end
+    return mksym(s)
+  end
+  if tk = 3 then do
+    s = ts
+    call advance
+    if s == "-" & (tk = 4 | tk = 5) then do
+      if tk = 4 then o = mkint(0 - ti)
+      else o = mkfloat(0.0 - tf)
+      call advance
+      return o
+    end
+    return mksym(s)
+  end
+  call perr "bad literal array element"
+  call advance
+  return nil_oop
+
+parse_litarray2: procedure = .int
+  /* {...} inside a literal array: treated as an array of its elements until } */
+  n = .int
+  m = .int
+  arr = .int
+  v = .int
+  tmp = .int[]
+  n = 0
+  do while tk \= 16 & tk \= 0 & pe = 0
+    v = parse_litelem()
+    n = n + 1
+    tmp[n] = v
+  end
+  if tk = 16 then call advance
+  arr = mkarray(n)
+  do m = 1 to n
+    call slot_put arr, m - 1, tmp[m]
+  end
+  return arr
+
+parse_bytearray: procedure = .int
+  n = .int
+  m = .int
+  arr = .int
+  tmp = .int[]
+  n = 0
+  do while tk = 4
+    n = n + 1
+    tmp[n] = mkint(ti)
+    call advance
+  end
+  if tk = 14 then call advance
+  else call perr "missing ] in byte array"
+  arr = mkarray(n)
+  do m = 1 to n
+    call slot_put arr, m - 1, tmp[m]
+  end
+  return arr
+
+/* [ :a :b | | t | stmts ] */
+parse_block: procedure = .int
+  np = .int
+  nt2 = .int
+  first_p = .int
+  first_t = .int
+  body = .int
+  call advance
+  np = 0
+  first_p = nnl + 1
+  do while tk = 19
+    call advance
+    if tk = 1 then do
+      nnl = nnl + 1
+      nl_name[nnl] = ts
+      np = np + 1
+      call advance
+    end
+    else call perr "block parameter name expected"
+  end
+  if np > 0 then do
+    if isbin("|") = 1 then call advance
+    else if isbin("||") = 1 then do
+      /* [:a || t | ...]  -- the second bar opens a temporaries list */
+      ts = "|"
+    end
+    else if tk \= 14 then call perr "| expected after block parameters"
+  end
+  first_t = nnl + 1
+  nt2 = parse_temps()
+  body = parse_stmts(14)
+  if tk = 14 then call advance
+  else call perr "missing ]"
+  return nd(44, body, first_p, np, first_t, nt2, "")
+
+/* | a b c |  (returns the count; names are appended to nl_name) */
+parse_temps: procedure = .int
+  n = .int
+  n = 0
+  do while isbin("|") = 1 | isbin("||") = 1
+    if isbin("||") = 1 then call advance
+    else do
+      call advance
+      do while tk = 1
+        nnl = nnl + 1
+        nl_name[nnl] = ts
+        n = n + 1
+        call advance
+      end
+      if isbin("|") = 1 then call advance
+      else call perr "| expected after temporaries"
+    end
+  end
+  return n
+
+
+/* ---------------------------------------------------------------------
+   Methods, classes and the file-in loop
+   --------------------------------------------------------------------- */
+skip_pragma: procedure = .void
+  /* at the "<" of a pragma */
+  nme = .string
+  call advance
+  if tk = 2 & ts == "primitive:" then do
+    call advance
+    if tk = 1 then do
+      pm_prim = wordpos(ts, prim_names)
+      if pm_prim = 0 then call perr "unknown primitive " || ts
+    end
+    else if tk = 4 then pm_prim = ti
+    call advance
+  end
+  do while tk \= 0 & isbin(">") = 0
+    call advance
+  end
+  if tk \= 0 then call advance
+  return
+
+/* method body after the "[": temps, pragmas, statements, up to "]" */
+parse_method_body: procedure = .int
+  body = .int
+  pm_prim = 0
+  pm_tfirst = nnl + 1
+  pm_ntemps = 0
+  do forever
+    if isbin("|") = 1 | isbin("||") = 1 then pm_ntemps = pm_ntemps + parse_temps()
+    else if isbin("<") = 1 then call skip_pragma
+    else leave
+  end
+  body = parse_stmts(14)
+  if tk = 14 then call advance
+  else call perr "missing ] at end of method"
+  return body
+
+/* parse "pattern [ body ]" and install it in class c */
+parse_method_def: procedure = .void
+  arg c = .int
+  sel = .string
+  np = .int
+  pfirst = .int
+  body = .int
+  tfirst = .int
+  ntemps = .int
+  prim = .int
+  startp = .int
+  startp = tpos
+  sel = ""
+  np = 0
+  pfirst = nnl + 1
+  if tk = 1 then do
+    sel = ts
+    call advance
+  end
+  else if tk = 3 then do
+    sel = ts
+    call advance
+    if tk = 1 then do
+      nnl = nnl + 1
+      nl_name[nnl] = ts
+      np = 1
+      call advance
+    end
+    else call perr "binary method parameter expected"
+  end
+  else if tk = 2 then do
+    do while tk = 2
+      sel = sel || ts
+      call advance
+      if tk = 1 then do
+        nnl = nnl + 1
+        nl_name[nnl] = ts
+        np = np + 1
+        call advance
+      end
+      else call perr "keyword method parameter expected"
+    end
+  end
+  else do
+    call perr "method pattern expected"
+    call advance
+    return
+  end
+  if tk \= 13 then do
+    call perr "[ expected after method pattern " || sel
+    return
+  end
+  call advance
+  body = parse_method_body()
+  if pe = 1 then return
+  tfirst = pm_tfirst
+  ntemps = pm_ntemps
+  prim = pm_prim
+  call compile_method c, sel, pfirst, np, tfirst, ntemps, body, prim, startp
+  return
+
+/* items inside  Foo subclass: Bar [ ... ]  (cnum is the class) */
+parse_class_body: procedure = .void
+  arg cnum = .int
+  nme = .string
+  c2 = .int
+  o = .int
+  e = .int
+  m = .int
+  do forever
+    if tk = 14 | tk = 0 | pe = 1 then leave
+    if tk = 17 then do
+      call advance
+      iterate
+    end
+    if (isbin("|") = 1 | isbin("||") = 1) & pattern_follows() = 0 then do
+      do while isbin("|") = 1 | isbin("||") = 1
+        if isbin("||") = 1 then call advance
+        else do
+          call advance
+          do while tk = 1
+            call add_ivar cnum, ts
+            call advance
+          end
+          if isbin("|") = 1 then call advance
+          else call perr "| expected"
+        end
+      end
+      iterate
+    end
+    if isbin("<") = 1 & pattern_follows() = 0 then do
+      pm_prim = 0
+      call skip_pragma
+      iterate
+    end
+    if tk = 1 then do
+      call peek_tok
+      if pk_t = 9 then do
+        nme = ts
+        call advance
+        call advance
+        e = parse_expr()
+        if tk = 17 then call advance
+        if pe = 0 then call define_classvar cnum, nme, e
+        iterate
+      end
+      if pk_t = 1 & pk_s == "class" then do
+        /* Foo class >> sel [ ]   or   Foo class [ | a | ] */
+        nme = ts
+        m = lex_mark()
+        call advance
+        call advance
+        if isbin(">>") = 1 then do
+          call lex_drop m
+          call advance
+          c2 = find_class(nme)
+          if c2 = 0 then do
+            call perr "unknown class " || nme
+            leave
+          end
+          call parse_method_def c_meta[c2]
+          iterate
+        end
+        if tk = 13 then do
+          call lex_drop m
+          call advance
+          c2 = find_class(nme)
+          if c2 = 0 then do
+            call perr "unknown class " || nme
+            leave
+          end
+          call parse_class_body c_meta[c2]
+          iterate
+        end
+        call lex_reset m
+      end
+      if pk_t = 3 & pk_s == ">>" then do
+        nme = ts
+        call advance
+        call advance
+        c2 = find_class(nme)
+        if c2 = 0 then do
+          call perr "unknown class " || nme
+          leave
+        end
+        call parse_method_def c2
+        iterate
+      end
+    end
+    call parse_method_def cnum
+  end
+  if tk = 14 then call advance
+  return
+
+/* "Foo class [ | a b | ]" and "Foo class extend [ ... ]" style bodies for the metaclass */
+parse_meta_body: procedure = .void
+  arg cnum = .int
+  call parse_class_body c_meta[cnum]
+  return
+
+/* is the token sequence at the mark "pattern [" ? (used to spot Foo >> sel [ ) */
+pattern_follows: procedure = .int
+  m = .int
+  ok = .int
+  m = lex_mark()
+  ok = 0
+  if tk = 1 then do
+    call advance
+    if tk = 13 then ok = 1
+  end
+  else if tk = 3 then do
+    call advance
+    if tk = 1 then do
+      call advance
+      if tk = 13 then ok = 1
+    end
+  end
+  else if tk = 2 then do
+    do while tk = 2
+      call advance
+      if tk = 1 then call advance
+      else leave
+    end
+    if tk = 13 then ok = 1
+  end
+  call lex_reset m
+  return ok
+
+/* process one top-level construct; returns after consuming it */
+top_item: procedure = .void
+  m = .int
+  nme = .string
+  sup = .string
+  cn = .int
+  sc = .int
+  st = .int
+  n = .int
+  e = .int
+  if tk = 1 & ts == "Eval" then do
+    call peek_tok
+    if pk_t = 13 then do
+      call advance
+      call advance
+      do forever
+        do while tk = 17
+          call advance
+        end
+        if tk = 14 | tk = 0 | pe = 1 then leave
+        if isbin("|") = 1 | isbin("||") = 1 then do
+          n = parse_temps()
+          iterate
+        end
+        st = parse_statement()
+        if pe = 0 then call run_doit st
+        if tk = 17 then call advance
+      end
+      if tk = 14 then call advance
+      return
+    end
+  end
+  if tk = 1 then do
+    m = lex_mark()
+    nme = ts
+    call advance
+    if tk = 2 & ts == "subclass:" then do
+      call advance
+      if tk = 1 then do
+        sup = nme
+        nme = ts
+        call advance
+        if tk = 13 then do
+          call lex_drop m
+          call advance
+          sc = find_class(sup)
+          if sc = 0 & sup \== "nil" then do
+            call perr "unknown superclass " || sup
+            return
+          end
+          cn = define_class(nme, sc)
+          call parse_class_body cn
+          return
+        end
+      end
+    end
+    else if tk = 1 & ts == "extend" then do
+      call advance
+      if tk = 13 then do
+        call lex_drop m
+        call advance
+        cn = find_class(nme)
+        if cn = 0 then do
+          call perr "unknown class " || nme
+          return
+        end
+        call parse_class_body cn
+        return
+      end
+    end
+    else if tk = 1 & ts == "class" then do
+      call advance
+      if tk = 1 & ts == "extend" then do
+        call advance
+        if tk = 13 then do
+          call lex_drop m
+          call advance
+          cn = find_class(nme)
+          if cn = 0 then do
+            call perr "unknown class " || nme
+            return
+          end
+          call parse_class_body c_meta[cn]
+          return
+        end
+      end
+      else if isbin(">>") = 1 then do
+        call advance
+        if pattern_follows() = 1 then do
+          call lex_drop m
+          cn = find_class(nme)
+          if cn = 0 then do
+            call perr "unknown class " || nme
+            return
+          end
+          call parse_method_def c_meta[cn]
+          return
+        end
+      end
+      else if tk = 13 then do
+        call lex_drop m
+        call advance
+        cn = find_class(nme)
+        if cn = 0 then do
+          call perr "unknown class " || nme
+          return
+        end
+        call parse_class_body c_meta[cn]
+        return
+      end
+    end
+    else if isbin(">>") = 1 then do
+      call advance
+      if pattern_follows() = 1 then do
+        call lex_drop m
+        cn = find_class(nme)
+        if cn = 0 then do
+          call perr "unknown class " || nme
+          return
+        end
+        call parse_method_def cn
+        return
+      end
+    end
+    call lex_reset m
+  end
+  if isbin("|") = 1 | isbin("||") = 1 then do
+    n = parse_temps()
+    return
+  end
+  st = parse_statement()
+  if pe = 0 then call run_doit st
+  return
+
+/* ---------------------------------------------------------------------
+   File-in: parse and execute a whole source text
+   --------------------------------------------------------------------- */
+file_in: procedure = .void
+  arg text = .string, name = .string
+  sv_txt = .string
+  sv_tp = .int
+  sv_len = .int
+  sv_name = .string
+  sv_tk = .int
+  sv_ts = .string
+  sv_ti = .int
+  sv_tf = .float
+  sv_tpos = .int
+  sv_pkh = .int
+  sv_pkt = .int
+  sv_pks = .string
+  sv_pki = .int
+  sv_pkf = .float
+  sv_pkp = .int
+  sv_pe = .int
+  sv_txt = txt
+  sv_tp = tp
+  sv_len = tlen
+  sv_name = src_name
+  sv_tk = tk
+  sv_ts = ts
+  sv_ti = ti
+  sv_tf = tf
+  sv_tpos = tpos
+  sv_pkh = pk_have
+  sv_pkt = pk_t
+  sv_pks = pk_s
+  sv_pki = pk_i
+  sv_pkf = pk_f
+  sv_pkp = pk_p
+  sv_pe = pe
+  txt = text
+  tp = 1
+  tlen = length(text)
+  src_name = name
+  pk_have = 0
+  pe = 0
+  call advance
+  do while tk \= 0 & halted = 0
+    pe = 0
+    if tk = 17 | tk = 20 then do
+      call advance
+      iterate
+    end
+    call top_item
+    if pe = 1 then do
+      /* resynchronise at the next statement end */
+      do while tk \= 0 & tk \= 17 & tk \= 20
+        call advance
+      end
+    end
+    else if tk = 17 | tk = 20 then call advance
+  end
+  txt = sv_txt
+  tp = sv_tp
+  tlen = sv_len
+  src_name = sv_name
+  tk = sv_tk
+  ts = sv_ts
+  ti = sv_ti
+  tf = sv_tf
+  tpos = sv_tpos
+  pk_have = sv_pkh
+  pk_t = sv_pkt
+  pk_s = sv_pks
+  pk_i = sv_pki
+  pk_f = sv_pkf
+  pk_p = sv_pkp
+  pe = sv_pe
+  return
+
+read_file: procedure = .string
+  arg fn = .string
+  fid = .int
+  eof = .int
+  rcx = .int
+  line = .string
+  acc = .string
+  chunk = .string
+  nl = .int
+  rmode = "r"
+  fid = 0
+  assembler fopen fid, fn, rmode
+  if fid = 0 then return ""
+  acc = ""
+  chunk = ""
+  nl = 0
+  eof = 0
+  do while eof = 0
+    line = ""
+    assembler freadline line, fid
+    assembler feof eof, fid
+    if eof > 0 & length(line) = 0 then leave
+    chunk = chunk || line || '0a'x
+    nl = nl + 1
+    if nl >= 100 then do
+      acc = acc || chunk
+      chunk = ""
+      nl = 0
+    end
+  end
+  assembler fclose rcx, fid
+  return acc || chunk
+
+
+/* ---------------------------------------------------------------------
+   Resolver: turns the raw syntax tree into executable nodes in place
+   --------------------------------------------------------------------- */
+declare_var: procedure = .int
+  arg nme = .string
+  s = .int
+  s = sc_next[lvl]
+  sc_next[lvl] = s + 1
+  if s + 1 > sc_max[lvl] then sc_max[lvl] = s + 1
+  envn = envn + 1
+  env_name[envn] = nme
+  env_slot[envn] = s
+  env_lvl[envn] = lvl
+  return s
+
+/* sets rv_kind (1 local, 2 ivar, 3 global cell), rv_a, rv_b */
+lookup_var: procedure = .void
+  arg nme = .string
+  k = .int
+  w = .int
+  do k = envn to 1 by -1
+    if env_name[k] == nme then do
+      rv_kind = 1
+      rv_a = lvl - env_lvl[k]
+      rv_b = env_slot[k]
+      return
+    end
+  end
+  w = wordpos(nme, c_ivn[r_cls])
+  if w > 0 then do
+    rv_kind = 2
+    rv_a = w - 1
+    return
+  end
+  k = find_cvar(r_cls, nme)
+  if k > 0 then do
+    rv_kind = 3
+    rv_a = k
+    return
+  end
+  rv_kind = 3
+  rv_a = gcell(nme)
+  return
+
+rs_list: procedure = .void
+  arg first = .int, n = .int
+  i = .int
+  do i = first to first + n - 1
+    al[i] = rs(al[i])
+  end
+  return
+
+rs_seq: procedure = .void
+  arg n = .int
+  call rs_list n_a[n], n_b[n]
+  return
+
+/* an inlined block: declare its parameters and temporaries, resolve the body */
+inline_block: procedure = .int
+  arg b = .int
+  first = .int
+  sv = .int
+  i = .int
+  body = .int
+  sv = envn
+  first = -1
+  do i = 0 to n_c[b] - 1
+    ib_slot = declare_var(nl_name[n_b[b] + i])
+    if first < 0 then first = ib_slot
+  end
+  do i = 0 to n_i[b] - 1
+    ib_slot = declare_var(nl_name[n_d[b] + i])
+  end
+  body = n_a[b]
+  call rs_seq body
+  envn = sv
+  ib_first = first
+  return body
+
+is_blk: procedure = .int
+  arg n = .int, np = .int
+  if nt[n] = 44 & n_c[n] = np then return 1
+  return 0
+
+is_blk01: procedure = .int
+  arg n = .int
+  if nt[n] = 44 & n_c[n] <= 1 then return 1
+  return 0
+
+rs: procedure = .int
+  arg n = .int
+  t = .int
+  nme = .string
+  k = .int
+  s = .string
+  a1 = .int
+  a2 = .int
+  a3 = .int
+  a4 = .int
+  i = .int
+  f = .int
+  sv = .int
+  r = .int
+  ok = .int
+  t = nt[n]
+  select
+    when t = 1 | t = 2 | t = 16 then nop
+    when t = 40 then do
+      nme = n_s[n]
+      if nme == "self" | nme == "super" then nt[n] = 2
+      else do
+        call lookup_var nme
+        if rv_kind = 1 then do
+          nt[n] = 3
+          n_a[n] = rv_a
+          n_b[n] = rv_b
+        end
+        else if rv_kind = 2 then do
+          nt[n] = 4
+          n_a[n] = rv_a
+        end
+        else do
+          nt[n] = 5
+          n_a[n] = rv_a
+        end
+      end
+    end
+    when t = 41 then do
+      n_c[n] = rs(n_a[n])
+      call lookup_var n_s[n]
+      if rv_kind = 1 then do
+        nt[n] = 6
+        n_a[n] = rv_a
+        n_b[n] = rv_b
+      end
+      else if rv_kind = 2 then do
+        nt[n] = 7
+        n_a[n] = rv_a
+      end
+      else do
+        nt[n] = 8
+        n_a[n] = rv_a
+      end
+    end
+    when t = 45 then do
+      n_a[n] = rs(n_a[n])
+      nt[n] = 13
+      if lvl > 1 then n_i[n] = 1
+      else n_i[n] = 0
+    end
+    when t = 14 then call rs_seq n
+    when t = 15 then call rs_list n_a[n], n_b[n]
+    when t = 44 then do
+      /* a real block: its own scope level */
+      sv = envn
+      sc_blk[lvl] = 1
+      lvl = lvl + 1
+      sc_next[lvl] = 0
+      sc_max[lvl] = 0
+      sc_blk[lvl] = 0
+      do i = 0 to n_c[n] - 1
+        k = declare_var(nl_name[n_b[n] + i])
+      end
+      do i = 0 to n_i[n] - 1
+        k = declare_var(nl_name[n_d[n] + i])
+      end
+      call rs_seq n_a[n]
+      nt[n] = 12
+      n_b[n] = n_c[n]
+      n_c[n] = sc_max[lvl]
+      n_d[n] = sc_blk[lvl]
+      lvl = lvl - 1
+      envn = sv
+    end
+    when t = 43 then do
+      n_a[n] = rs(n_a[n])
+      f = n_b[n]
+      do i = f to f + n_c[n] - 1
+        k = al[i]
+        call rs_list n_b[k], n_i[k]
+        n_c[k] = selid(n_s[k])
+        nt[k] = 11
+      end
+      nt[n] = 10
+    end
+    when t = 42 then do
+      s = n_s[n]
+      r = inline_send(n, s)
+      if r = 0 then do
+        n_a[n] = rs(n_a[n])
+        call rs_list n_b[n], n_i[n]
+        n_c[n] = selid(s)
+        nt[n] = 9
+      end
+    end
+    otherwise nop
+  end
+  return n
+
+/* try to compile a control-flow message inline; returns 1 if done */
+inline_send: procedure = .int
+  arg n = .int, s = .string
+  rcv = .int
+  f = .int
+  na = .int
+  a1 = .int
+  a2 = .int
+  a3 = .int
+  c = .int
+  b1 = .int
+  b2 = .int
+  st = .int
+  sl1 = .int
+  fv = .int
+  a1 = 0
+  a2 = 0
+  a3 = 0
+  rcv = n_a[n]
+  f = n_b[n]
+  na = n_i[n]
+  if na >= 1 then a1 = al[f]
+  if na >= 2 then a2 = al[f + 1]
+  if na >= 3 then a3 = al[f + 2]
+  if s == "ifTrue:" & is_blk(a1, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    n_c[n] = 0
+    nt[n] = 20
+    return 1
+  end
+  if s == "ifFalse:" & is_blk(a1, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_c[n] = inline_block(a1)
+    n_b[n] = 0
+    nt[n] = 20
+    return 1
+  end
+  if s == "ifTrue:ifFalse:" & is_blk(a1, 0) = 1 & is_blk(a2, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    n_c[n] = inline_block(a2)
+    nt[n] = 20
+    return 1
+  end
+  if s == "ifFalse:ifTrue:" & is_blk(a1, 0) = 1 & is_blk(a2, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_c[n] = inline_block(a1)
+    n_b[n] = inline_block(a2)
+    nt[n] = 20
+    return 1
+  end
+  if (s == "and:" | s == "or:") & is_blk(a1, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    if s == "and:" then nt[n] = 24
+    else nt[n] = 25
+    return 1
+  end
+  if (s == "whileTrue:" | s == "whileFalse:") & is_blk(rcv, 0) = 1 & is_blk(a1, 0) = 1 then do
+    n_a[n] = inline_block(rcv)
+    n_b[n] = inline_block(a1)
+    if s == "whileTrue:" then n_i[n] = 1
+    else n_i[n] = 0
+    nt[n] = 21
+    return 1
+  end
+  if (s == "whileTrue" | s == "whileFalse") & is_blk(rcv, 0) = 1 then do
+    n_a[n] = inline_block(rcv)
+    n_b[n] = 0
+    if s == "whileTrue" then n_i[n] = 1
+    else n_i[n] = 0
+    nt[n] = 21
+    return 1
+  end
+  if s == "repeat" & is_blk(rcv, 0) = 1 then do
+    n_a[n] = inline_block(rcv)
+    nt[n] = 27
+    return 1
+  end
+  if s == "timesRepeat:" & is_blk(a1, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    nt[n] = 23
+    return 1
+  end
+  if s == "to:do:" & is_blk(a2, 1) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = rs(a1)
+    n_c[n] = inline_block(a2)
+    n_i[n] = ib_first
+    n_d[n] = 0
+    nt[n] = 22
+    return 1
+  end
+  if s == "to:by:do:" & is_blk(a3, 1) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = rs(a1)
+    st = rs(a2)
+    n_c[n] = inline_block(a3)
+    n_i[n] = ib_first
+    n_d[n] = st
+    nt[n] = 22
+    return 1
+  end
+  if s == "ifNil:" & is_blk(a1, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    n_c[n] = 0
+    n_d[n] = 1
+    n_i[n] = -1
+    nt[n] = 26
+    return 1
+  end
+  if s == "ifNotNil:" & is_blk01(a1) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = 0
+    n_c[n] = inline_block(a1)
+    n_i[n] = -1
+    if n_c[a1] = 1 then n_i[n] = ib_first
+    n_d[n] = 0
+    nt[n] = 26
+    return 1
+  end
+  if s == "ifNil:ifNotNil:" & is_blk(a1, 0) = 1 & is_blk01(a2) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    sl1 = 0
+    c = inline_block(a2)
+    n_c[n] = c
+    n_i[n] = -1
+    if n_c[a2] = 1 then n_i[n] = ib_first
+    n_d[n] = 0
+    nt[n] = 26
+    return 1
+  end
+  if s == "ifNotNil:ifNil:" & is_blk01(a1) = 1 & is_blk(a2, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    c = inline_block(a1)
+    n_c[n] = c
+    n_i[n] = -1
+    if n_c[a1] = 1 then n_i[n] = ib_first
+    n_b[n] = inline_block(a2)
+    n_d[n] = 0
+    nt[n] = 26
+    return 1
+  end
+  return 0
+
+/* ---------------------------------------------------------------------
+   Entry points
+   --------------------------------------------------------------------- */
+start_scope: procedure = .void
+  arg c = .int
+  r_cls = c
+  envn = 0
+  lvl = 1
+  sc_next[1] = 0
+  sc_max[1] = 0
+  sc_blk[1] = 0
+  return
+
+compile_method: procedure = .void
+  arg c = .int, sel = .string, pfirst = .int, np = .int, tfirst = .int, ntemps = .int, body = .int, prim = .int, startp = .int
+  i = .int
+  k = .int
+  m = .int
+  call start_scope c
+  do i = 0 to np - 1
+    k = declare_var(nl_name[pfirst + i])
+  end
+  do i = 0 to ntemps - 1
+    k = declare_var(nl_name[tfirst + i])
+  end
+  call rs_seq body
+  m = install_method(c, selid(sel), np, body, sc_max[1], sc_blk[1], prim)
+  m_src[m] = startp
+  return
+
+/* run a top-level statement (a raw node) */
+run_doit: procedure = .void
+  arg st = .int
+  seq = .int
+  first = .int
+  fb = .int
+  v = .int
+  call start_scope cls_UndefinedObject
+  nal = nal + 1
+  al[nal] = st
+  seq = nd(14, nal, 1, 0, 0, 0, "")
+  call rs_seq seq
+  fb = alloc_frame(4 + sc_max[1])
+  vp[fb + 0] = 0
+  vp[fb + 1] = fb
+  vp[fb + 2] = nil_oop
+  vp[fb + 3] = 0
+  call init_temps fb + 4, sc_max[1]
+  cdepth = 0
+  unw = 0
+  htop = 0
+  v = ev(seq, fb)
+  if unw > 0 then do
+    if unw = 6 then halted = 1
+    unw = 0
+  end
+  htop = 0
+  return
+
+/* evaluate an expression node in the context of a class (class variable initialisers) */
+eval_in_class: procedure = .int
+  arg c = .int, e = .int
+  seq = .int
+  fb = .int
+  v = .int
+  call start_scope c
+  nal = nal + 1
+  al[nal] = e
+  seq = nd(14, nal, 1, 0, 0, 0, "")
+  call rs_seq seq
+  fb = alloc_frame(4 + sc_max[1])
+  vp[fb + 0] = 0
+  vp[fb + 1] = fb
+  vp[fb + 2] = nil_oop
+  vp[fb + 3] = 0
+  call init_temps fb + 4, sc_max[1]
+  v = ev(seq, fb)
+  if unw > 0 then unw = 0
+  return v
+
+
+/* ---------------------------------------------------------------------
+   Objects.  An oop is 2*index for heap objects, 2*n+1 for SmallIntegers.
+   --------------------------------------------------------------------- */
+mkint: procedure = .int
+  arg n = .int
+  return n * 2 + 1
+
+intval: procedure = .int
+  arg x = .int
+  return (x - 1) % 2
+
+newobj: procedure = .int
+  arg cls = .int, kind = .int, n = .int
+  i = .int
+  no = no + 1
+  o_cls[no] = cls
+  o_kind[no] = kind
+  o_n[no] = n
+  o_x[no] = 0
+  o_s[no] = ""
+  o_f[no] = 0.0
+  o_slot[no] = nsl + 1
+  do i = 1 to n
+    nsl = nsl + 1
+    sl[nsl] = nil_oop
+  end
+  return no * 2
+
+slot_get: procedure = .int
+  arg o = .int, i = .int
+  return sl[o_slot[o % 2] + i]
+
+slot_put: procedure = .void
+  arg o = .int, i = .int, v = .int
+  sl[o_slot[o % 2] + i] = v
+  return
+
+mkstr: procedure = .int
+  arg s = .string
+  o = .int
+  o = newobj(cls_String, 1, 0)
+  o_s[o % 2] = s
+  return o
+
+mksym: procedure = .int
+  arg s = .string
+  o = .int
+  v = .string
+  v = symtab[s]
+  if v \== "" then return v as .int
+  o = newobj(cls_Symbol, 2, 0)
+  o_s[o % 2] = s
+  symtab[s] = o
+  return o
+
+mkfloat: procedure = .int
+  arg f = .float
+  o = .int
+  o = newobj(cls_Float, 3, 0)
+  o_f[o % 2] = f
+  return o
+
+mkchar: procedure = .int
+  arg code = .int
+  o = .int
+  if code < 0 | code > 255 then code = 63
+  if chr_oop[code + 1] = 0 then do
+    o = newobj(cls_Character, 5, 0)
+    o_x[o % 2] = code
+    chr_oop[code + 1] = o
+  end
+  return chr_oop[code + 1]
+
+mkarray: procedure = .int
+  arg n = .int
+  return newobj(cls_Array, 4, n)
+
+mkbool: procedure = .int
+  arg b = .int
+  if b = 1 then return true_oop
+  return false_oop
+
+/* class number of any oop */
+cof: procedure = .int
+  arg x = .int
+  if x // 2 \= 0 then return cls_SmallInteger
+  return o_cls[x % 2]
+
+kindof: procedure = .int
+  arg x = .int
+  if x // 2 \= 0 then return -1
+  return o_kind[x % 2]
+
+/* string contents of a String or Symbol (or "" for anything else) */
+strof: procedure = .string
+  arg x = .int
+  k = .int
+  if x // 2 \= 0 then return ""
+  k = o_kind[x % 2]
+  if k = 1 | k = 2 | k = 7 then return o_s[x % 2]
+  return ""
+
+isstr: procedure = .int
+  arg x = .int
+  if x // 2 \= 0 then return 0
+  if o_kind[x % 2] = 1 | o_kind[x % 2] = 2 then return 1
+  return 0
+
+/* ---------------------------------------------------------------------
+   Globals, selectors
+   --------------------------------------------------------------------- */
+gcell: procedure = .int
+  arg nme = .string
+  v = .string
+  v = gmap[nme]
+  if v \== "" then return v as .int
+  ng = ng + 1
+  g_val[ng] = nil_oop
+  g_name[ng] = nme
+  gmap[nme] = ng
+  return ng
+
+gset: procedure = .void
+  arg nme = .string, v = .int
+  g_val[gcell(nme)] = v
+  return
+
+selid: procedure = .int
+  arg nme = .string
+  v = .string
+  n = .int
+  p = .int
+  v = selmap[nme]
+  if v \== "" then return v as .int
+  nsel = nsel + 1
+  if nsel >= 2048 then do
+    call outs "too many selectors" || '0a'x
+    return 1
+  end
+  sel_name[nsel] = nme
+  n = 0
+  if isletter(left(nme, 1)) = 1 then n = length(nme) - length(translate(nme, "", ":"))
+  else n = 1
+  sel_n[nsel] = n
+  selmap[nme] = nsel
+  return nsel
+
+/* ---------------------------------------------------------------------
+   Classes
+   --------------------------------------------------------------------- */
+find_class: procedure = .int
+  arg nme = .string
+  v = .string
+  v = cmap[nme]
+  if v == "" then return 0
+  return v as .int
+
+mkclassrec: procedure = .int
+  arg nme = .string, sup = .int
+  c = .int
+  nc = nc + 1
+  c = nc
+  c_name[c] = nme
+  c_super[c] = sup
+  c_meta[c] = 0
+  c_ismeta[c] = 0
+  c_this[c] = 0
+  c_kind[c] = 0
+  c_ninst[c] = 0
+  c_ivn[c] = ""
+  c_oop[c] = 0
+  if sup > 0 then do
+    c_kind[c] = c_kind[sup]
+    c_ninst[c] = c_ninst[sup]
+    c_ivn[c] = c_ivn[sup]
+  end
+  return c
+
+/* create (or reopen) class nme with superclass sup (0 = none) */
+define_class: procedure = .int
+  arg nme = .string, sup = .int
+  c = .int
+  m = .int
+  msup = .int
+  o = .int
+  c = find_class(nme)
+  if c > 0 then do
+    if c_super[c] \= sup then do
+      c_super[c] = sup
+      if sup > 0 then do
+        c_ivn[c] = c_ivn[sup]
+        c_ninst[c] = c_ninst[sup]
+        c_kind[c] = c_kind[sup]
+        c_super[c_meta[c]] = c_meta[sup]
+      end
+      gen = gen + 1
+    end
+    return c
+  end
+  c = mkclassrec(nme, sup)
+  if sup > 0 then msup = c_meta[sup]
+  else msup = cls_Class
+  m = mkclassrec(nme || " class", msup)
+  c_ismeta[m] = 1
+  c_this[m] = c
+  c_meta[c] = m
+  if sup > 0 then do
+    c_ninst[m] = c_ninst[msup]
+    c_ivn[m] = c_ivn[msup]
+  end
+  else do
+    c_ninst[m] = 0
+    c_ivn[m] = ""
+  end
+  c_kind[m] = 0
+  o = newobj(m, 9, c_ninst[m])
+  o_x[o % 2] = c
+  c_oop[c] = o
+  o = newobj(cls_Metaclass, 10, 0)
+  o_x[o % 2] = m
+  c_oop[m] = o
+  cmap[nme] = c
+  call gset nme, c_oop[c]
+  if nme == "Class" then cls_Class = c
+  return c
+
+add_ivar: procedure = .void
+  arg c = .int, nme = .string
+  k = .int
+  oldn = .int
+  if wordpos(nme, c_ivn[c]) > 0 then return
+  oldn = words(c_ivn[c])
+  c_ivn[c] = strip(c_ivn[c] || " " || nme)
+  c_ninst[c] = oldn + 1
+  do k = 1 to nc
+    if c_super[k] = c then call ivar_inherit k, oldn, c
+  end
+  /* class-side variables: grow the slots of the class objects */
+  do k = 1 to nc
+    if c_ismeta[k] = 1 & c_oop[c_this[k]] > 0 then do
+      if inherits(k, c) = 1 then call grow_class_slots c_this[k]
+    end
+  end
+  return
+
+ivar_inherit: procedure = .void
+  arg k = .int, oldn = .int, parent = .int
+  own = .string
+  kold = .int
+  j = .int
+  kold = words(c_ivn[k])
+  own = ""
+  if kold > oldn then own = subword(c_ivn[k], oldn + 1)
+  c_ivn[k] = strip(c_ivn[parent] || " " || own)
+  c_ninst[k] = words(c_ivn[k])
+  do j = 1 to nc
+    if c_super[j] = k then call ivar_inherit j, kold, k
+  end
+  return
+
+grow_class_slots: procedure = .void
+  arg c = .int
+  o = .int
+  need = .int
+  have = .int
+  i = .int
+  old = .int
+  base = .int
+  o = c_oop[c] % 2
+  need = c_ninst[c_meta[c]]
+  have = o_n[o]
+  if need <= have then return
+  old = o_slot[o]
+  base = nsl + 1
+  do i = 0 to have - 1
+    nsl = nsl + 1
+    sl[nsl] = sl[old + i]
+  end
+  do i = have + 1 to need
+    nsl = nsl + 1
+    sl[nsl] = nil_oop
+  end
+  o_slot[o] = base
+  o_n[o] = need
+  return
+
+/* ---------------------------------------------------------------------
+   Methods
+   --------------------------------------------------------------------- */
+install_method: procedure = .int
+  arg c = .int, sel = .int, nargs = .int, body = .int, ntemps = .int, hasblk = .int, prim = .int
+  m = .int
+  nmeth = nmeth + 1
+  m = nmeth
+  m_sel[m] = sel
+  m_cls[m] = c
+  m_nargs[m] = nargs
+  m_body[m] = body
+  m_ntemps[m] = ntemps
+  m_hasblk[m] = hasblk
+  m_prim[m] = prim
+  cm[c * 2048 + sel] = m
+  gen = gen + 1
+  return m
+
+lookup: procedure = .int
+  arg c = .int, sel = .int
+  i = .int
+  k = .int
+  m = .int
+  i = c * 2048 + sel
+  if lkg[i] = gen then return lk[i]
+  m = 0
+  k = c
+  do while k > 0
+    m = cm[k * 2048 + sel]
+    if m > 0 then leave
+    k = c_super[k]
+  end
+  lk[i] = m
+  lkg[i] = gen
+  return m
+
+/* is class c a subclass of (or equal to) d ? */
+inherits: procedure = .int
+  arg c = .int, d = .int
+  k = .int
+  k = c
+  do while k > 0
+    if k = d then return 1
+    k = c_super[k]
+  end
+  return 0
+
+/* class variables: name -> cell (searching up the superclass chain) */
+find_cvar: procedure = .int
+  arg c0 = .int, nme = .string
+  c = .int
+  v = .string
+  c = c0
+  if c_ismeta[c] = 1 then c = c_this[c]
+  do while c > 0
+    v = cvmap[c || "." || nme]
+    if v \== "" then return v as .int
+    c = c_super[c]
+  end
+  return 0
+
+define_classvar: procedure = .void
+  arg c0 = .int, nme = .string, e = .int
+  c = .int
+  cell = .int
+  v = .int
+  c = c0
+  if c_ismeta[c] = 1 then c = c_this[c]
+  cell = find_cvar(c, nme)
+  if cell = 0 | cvmap[c || "." || nme] == "" then do
+    ng = ng + 1
+    g_val[ng] = nil_oop
+    g_name[ng] = nme
+    cvmap[c || "." || nme] = ng
+    cell = ng
+  end
+  v = eval_in_class(c, e)
+  g_val[cell] = v
+  return
+
+
+/* ---------------------------------------------------------------------
+   Frames
+   --------------------------------------------------------------------- */
+alloc_frame: procedure = .int
+  arg size = .int
+  fb = .int
+  fb = fl_head[size]
+  if fb > 0 then do
+    fl_head[size] = vp[fb]
+    return fb
+  end
+  fb = nvp + 1
+  nvp = nvp + size
+  return fb
+
+free_frame: procedure = .void
+  arg fb = .int, size = .int
+  vp[fb] = fl_head[size]
+  fl_head[size] = fb
+  return
+
+init_temps: procedure = .void
+  arg base = .int, n = .int
+  i = .int
+  do i = 0 to n - 1
+    vp[base + i] = nil_oop
+  end
+  return
+
+/* ---------------------------------------------------------------------
+   Sending messages
+   --------------------------------------------------------------------- */
+trace_line: procedure = .string
+  arg m = .int, r = .int
+  rc = .int
+  rc = cof(r)
+  if rc = m_cls[m] then return c_name[rc] || ">>" || sel_name[m_sel[m]]
+  return c_name[rc] || "(" || c_name[m_cls[m]] || ")>>" || sel_name[m_sel[m]]
+
+print_trace: procedure = .void
+  i = .int
+  sg0 = .int
+  mc = .int
+  sg0 = find_class("Signal")
+  do i = cdepth to 1 by -1
+    mc = m_cls[cs_m[i]]
+    if c_ismeta[mc] = 1 then mc = c_this[mc]
+    if sg0 = 0 | inherits(mc, sg0) = 0 then call outs trace_line(cs_m[i], cs_r[i]) || '0a'x
+  end
+  call outs "UndefinedObject>>executeStatements" || '0a'x
+  return
+
+/* report an error as a Smalltalk Error (signal) with the given text */
+st_error: procedure = .void
+  arg rcv = .int, msg = .string
+  base = .int
+  r = .int
+  base = asp
+  asp = asp + 1
+  ast[asp] = mkstr(msg)
+  r = send_sel(rcv, 50, base, 1)
+  asp = base
+  return
+
+/* perform a send whose arguments are already at ast[base+1 .. base+na] */
+send_sel: procedure = .int
+  arg rcv = .int, sel = .int, base = .int, na = .int
+  m = .int
+  c = .int
+  c = cof(rcv)
+  m = lookup(c, sel)
+  if m = 0 then return send_dnu(rcv, sel, base, na)
+  return invoke(m, rcv, base, na)
+
+send_dnu: procedure = .int
+  arg rcv = .int, sel = .int, base = .int, na = .int
+  msg = .int
+  arr = .int
+  i = .int
+  m = .int
+  b2 = .int
+  if in_dnu > 50 then do
+    call outs "doesNotUnderstand: recursion for #" || sel_name[sel] || '0a'x
+    unw = 5
+    return 0
+  end
+  arr = mkarray(na)
+  do i = 1 to na
+    call slot_put arr, i - 1, ast[base + i]
+  end
+  msg = newobj(cls_Message, 0, 2)
+  call slot_put msg, 0, mksym(sel_name[sel])
+  call slot_put msg, 1, arr
+  m = lookup(cof(rcv), 21)
+  if m = 0 then do
+    call outs "Object: " || printstr0(rcv) || " error: did not understand #" || sel_name[sel] || '0a'x
+    unw = 5
+    return 0
+  end
+  b2 = asp
+  asp = asp + 1
+  ast[asp] = msg
+  in_dnu = in_dnu + 1
+  i = invoke(m, rcv, b2, 1)
+  in_dnu = in_dnu - 1
+  asp = b2
+  return i
+
+printstr0: procedure = .string
+  arg x = .int
+  k = .int
+  if x // 2 \= 0 then return intval(x) as .string
+  k = o_kind[x % 2]
+  if k = 1 then return "'" || o_s[x % 2] || "'"
+  if k = 2 then return "#" || o_s[x % 2]
+  if x = nil_oop then return "nil"
+  if x = true_oop then return "true"
+  if x = false_oop then return "false"
+  if k = 9 | k = 10 then return c_name[o_x[x % 2]]
+  return "a " || c_name[o_cls[x % 2]]
+
+/* run method m for receiver rcv with args at ast[base+1..base+na] */
+invoke: procedure = .int
+  arg m = .int, rcv = .int, base = .int, na = .int
+  p = .int
+  r = .int
+  nf = .int
+  size = .int
+  i = .int
+  body = .int
+  nt0 = .int
+  p = m_prim[m]
+  if p > 0 then do
+    r = prim(p, rcv, base, na)
+    if unw > 0 then return 0
+    if r \= 0 then return r
+    if n_b[m_body[m]] = 0 then do
+      call st_error rcv, "primitive failed: " || sel_name[m_sel[m]]
+      return 0
+    end
+  end
+  nt0 = m_ntemps[m]
+  size = 4 + nt0
+  nf = alloc_frame(size)
+  vp[nf] = 0
+  vp[nf + 1] = nf
+  vp[nf + 2] = rcv
+  vp[nf + 3] = m
+  do i = 1 to m_nargs[m]
+    vp[nf + 3 + i] = ast[base + i]
+  end
+  do i = m_nargs[m] + 1 to nt0
+    vp[nf + 3 + i] = nil_oop
+  end
+  cdepth = cdepth + 1
+  if cdepth > 20000 then do
+    call outs "call stack too deep" || '0a'x
+    cdepth = cdepth - 1
+    unw = 5
+    return 0
+  end
+  cs_m[cdepth] = m
+  cs_r[cdepth] = rcv
+  r = ev(m_body[m], nf)
+  cdepth = cdepth - 1
+  if unw = 1 & unw_t = nf then do
+    unw = 0
+    r = unw_v
+  end
+  else if unw = 0 then r = rcv
+  else r = 0
+  if m_hasblk[m] = 0 then call free_frame nf, size
+  else vp[nf + 1] = 0
+  return r
+
+/* ---------------------------------------------------------------------
+   Blocks
+   --------------------------------------------------------------------- */
+call_block: procedure = .int
+  arg blk = .int, base = .int, na = .int
+  node = .int
+  outer = .int
+  size = .int
+  bf = .int
+  i = .int
+  r = .int
+  node = o_x[blk % 2]
+  if n_b[node] \= na then do
+    call st_error blk, "wrong argument count"
+    return 0
+  end
+  outer = o_slot[blk % 2]
+  size = 4 + n_c[node]
+  bf = alloc_frame(size)
+  vp[bf] = outer
+  vp[bf + 1] = vp[outer + 1]
+  vp[bf + 2] = vp[outer + 2]
+  vp[bf + 3] = vp[outer + 3]
+  do i = 1 to na
+    vp[bf + 3 + i] = ast[base + i]
+  end
+  do i = na + 1 to n_c[node]
+    vp[bf + 3 + i] = nil_oop
+  end
+  r = ev(n_a[node], bf)
+  if n_d[node] = 0 then call free_frame bf, size
+  if unw > 0 then return 0
+  return r
+
+/* value of a block with no arguments */
+block0: procedure = .int
+  arg blk = .int
+  return call_block(blk, asp, 0)
+
+/* ---------------------------------------------------------------------
+   The evaluator
+   --------------------------------------------------------------------- */
+ev: procedure = .int
+  arg n = .int, fb = .int
+  t = .int
+  d = .int
+  f = .int
+  v = .int
+  i = .int
+  c = .int
+  lim = .int
+  t = nt[n]
+  select
+    when t = 3 then do
+      d = n_a[n]
+      f = fb
+      do while d > 0
+        f = vp[f]
+        d = d - 1
+      end
+      return vp[f + 4 + n_b[n]]
+    end
+    when t = 9 then return do_send(n, fb)
+    when t = 1 then return n_a[n]
+    when t = 2 then return vp[fb + 2]
+    when t = 4 then return sl[o_slot[vp[fb + 2] % 2] + n_a[n]]
+    when t = 5 then return g_val[n_a[n]]
+    when t = 6 then do
+      v = ev(n_c[n], fb)
+      if unw > 0 then return 0
+      d = n_a[n]
+      f = fb
+      do while d > 0
+        f = vp[f]
+        d = d - 1
+      end
+      vp[f + 4 + n_b[n]] = v
+      return v
+    end
+    when t = 7 then do
+      v = ev(n_c[n], fb)
+      if unw > 0 then return 0
+      sl[o_slot[vp[fb + 2] % 2] + n_a[n]] = v
+      return v
+    end
+    when t = 8 then do
+      v = ev(n_c[n], fb)
+      if unw > 0 then return 0
+      g_val[n_a[n]] = v
+      return v
+    end
+    when t = 14 then do
+      v = nil_oop
+      f = n_a[n]
+      do i = f to f + n_b[n] - 1
+        v = ev(al[i], fb)
+        if unw > 0 then return 0
+      end
+      return v
+    end
+    when t = 13 then do
+      v = ev(n_a[n], fb)
+      if unw > 0 then return 0
+      f = vp[fb + 1]
+      if n_i[n] = 1 & (f = 0 | vp[f + 1] \= f) then do
+        call outs "BlockContext>>cannotReturn: non-local return from a dead method context" || '0a'x
+        unw = 5
+        return 0
+      end
+      unw = 1
+      unw_t = f
+      unw_v = v
+      return 0
+    end
+    when t = 20 then do
+      v = ev(n_a[n], fb)
+      if unw > 0 then return 0
+      if v = true_oop then do
+        if n_b[n] > 0 then return ev(n_b[n], fb)
+        return nil_oop
+      end
+      if v = false_oop then do
+        if n_c[n] > 0 then return ev(n_c[n], fb)
+        return nil_oop
+      end
+      return not_boolean(v, "ifTrue:")
+    end
+    when t = 21 then do
+      do forever
+        v = ev(n_a[n], fb)
+        if unw > 0 then return 0
+        if v = true_oop then c = 1
+        else if v = false_oop then c = 0
+        else return not_boolean(v, "whileTrue:")
+        if c \= n_i[n] then leave
+        if n_b[n] > 0 then do
+          v = ev(n_b[n], fb)
+          if unw > 0 then return 0
+        end
+      end
+      return nil_oop
+    end
+    when t = 24 | t = 25 then do
+      v = ev(n_a[n], fb)
+      if unw > 0 then return 0
+      if v = true_oop then do
+        if t = 24 then return ev(n_b[n], fb)
+        return true_oop
+      end
+      if v = false_oop then do
+        if t = 25 then return ev(n_b[n], fb)
+        return false_oop
+      end
+      return not_boolean(v, "and:")
+    end
+    when t = 22 then return do_todo(n, fb)
+    when t = 23 then do
+      v = ev(n_a[n], fb)
+      if unw > 0 then return 0
+      if v // 2 = 0 then return not_number(v, "timesRepeat:")
+      lim = intval(v)
+      do i = 1 to lim
+        c = ev(n_b[n], fb)
+        if unw > 0 then return 0
+      end
+      return v
+    end
+    when t = 26 then do
+      v = ev(n_a[n], fb)
+      if unw > 0 then return 0
+      if v = nil_oop then do
+        if n_b[n] > 0 then return ev(n_b[n], fb)
+        return nil_oop
+      end
+      if n_c[n] > 0 then do
+        if n_i[n] >= 0 then vp[fb + 4 + n_i[n]] = v
+        return ev(n_c[n], fb)
+      end
+      return v
+    end
+    when t = 27 then do
+      do forever
+        v = ev(n_a[n], fb)
+        if unw > 0 then return 0
+      end
+      return nil_oop
+    end
+    when t = 10 then return do_cascade(n, fb)
+    when t = 12 then do
+      v = newobj(cls_BlockClosure, 6, 0)
+      o_x[v % 2] = n
+      o_slot[v % 2] = fb
+      return v
+    end
+    when t = 15 then do
+      c = n_b[n]
+      v = mkarray(c)
+      do i = 0 to c - 1
+        f = ev(al[n_a[n] + i], fb)
+        if unw > 0 then return 0
+        sl[o_slot[v % 2] + i] = f
+      end
+      return v
+    end
+    when t = 16 then return nil_oop
+    otherwise nop
+  end
+  return nil_oop
+
+not_boolean: procedure = .int
+  arg v = .int, sel = .string
+  call st_error v, "doesNotUnderstand: #" || sel || " (receiver is not a Boolean)"
+  return 0
+
+not_number: procedure = .int
+  arg v = .int, sel = .string
+  call st_error v, "doesNotUnderstand: #" || sel
+  return 0
+
+do_todo: procedure = .int
+  arg n = .int, fb = .int
+  a = .int
+  b = .int
+  st = .int
+  x = .int
+  y = .int
+  s = .int
+  slot = .int
+  v = .int
+  r = .int
+  base = .int
+  a = ev(n_a[n], fb)
+  if unw > 0 then return 0
+  b = ev(n_b[n], fb)
+  if unw > 0 then return 0
+  if n_d[n] > 0 then do
+    st = ev(n_d[n], fb)
+    if unw > 0 then return 0
+  end
+  else st = mkint(1)
+  slot = fb + 4 + n_i[n]
+  if a // 2 \= 0 & b // 2 \= 0 & st // 2 \= 0 then do
+    x = intval(a)
+    y = intval(b)
+    s = intval(st)
+    if s = 0 then do
+      call st_error a, "step must be non-zero"
+      return 0
+    end
+    if s > 0 then do
+      do while x <= y
+        vp[slot] = mkint(x)
+        v = ev(n_c[n], fb)
+        if unw > 0 then return 0
+        x = x + s
+      end
+    end
+    else do
+      do while x >= y
+        vp[slot] = mkint(x)
+        v = ev(n_c[n], fb)
+        if unw > 0 then return 0
+        x = x + s
+      end
+    end
+    return a
+  end
+  /* general numbers: use sends */
+  base = asp
+  v = a
+  do forever
+    asp = base + 1
+    ast[asp] = b
+    if is_neg(st) = 0 then r = send_sel(v, 9, base, 1)
+    else r = send_sel(v, 10, base, 1)
+    asp = base
+    if unw > 0 then return 0
+    if r \= true_oop then leave
+    vp[slot] = v
+    r = ev(n_c[n], fb)
+    if unw > 0 then return 0
+    asp = base + 1
+    ast[asp] = st
+    v = send_sel(v, 1, base, 1)
+    asp = base
+    if unw > 0 then return 0
+  end
+  return a
+
+is_neg: procedure = .int
+  arg x = .int
+  if x // 2 \= 0 then do
+    if intval(x) < 0 then return 1
+    return 0
+  end
+  if o_kind[x % 2] = 3 then do
+    if o_f[x % 2] < 0.0 then return 1
+  end
+  return 0
+
+do_cascade: procedure = .int
+  arg n = .int, fb = .int
+  rcv = .int
+  i = .int
+  k = .int
+  j = .int
+  base = .int
+  v = .int
+  r = .int
+  f = .int
+  rcv = ev(n_a[n], fb)
+  if unw > 0 then return 0
+  r = nil_oop
+  do i = n_b[n] to n_b[n] + n_c[n] - 1
+    k = al[i]
+    base = asp
+    do j = 0 to n_i[k] - 1
+      v = ev(al[n_b[k] + j], fb)
+      if unw > 0 then do
+        asp = base
+        return 0
+      end
+      asp = asp + 1
+      ast[asp] = v
+    end
+    r = send_sel(rcv, n_c[k], base, n_i[k])
+    asp = base
+    if unw > 0 then return 0
+  end
+  return r
+
+do_send: procedure = .int
+  arg n = .int, fb = .int
+  rn = .int
+  sel = .int
+  na = .int
+  rcv = .int
+  c = .int
+  m = .int
+  i = .int
+  base = .int
+  v = .int
+  x = .int
+  y = .int
+  r = .int
+  f = .int
+  rn = n_a[n]
+  sel = n_c[n]
+  na = n_i[n]
+  if n_d[n] = 1 then do
+    rcv = vp[fb + 2]
+    c = c_super[m_cls[vp[fb + 3]]]
+    if c = 0 then c = cls_Object
+  end
+  else do
+    rcv = ev(rn, fb)
+    if unw > 0 then return 0
+    c = 0
+  end
+  base = asp
+  f = n_b[n]
+  do i = 0 to na - 1
+    v = ev(al[f + i], fb)
+    if unw > 0 then do
+      asp = base
+      return 0
+    end
+    asp = asp + 1
+    ast[asp] = v
+  end
+  /* fast paths for SmallInteger arithmetic and comparison */
+  if na = 1 & sel <= 14 then do
+    v = ast[asp]
+    if rcv // 2 \= 0 & v // 2 \= 0 then do
+      x = intval(rcv)
+      y = intval(v)
+      select
+        when sel = 1 then do
+          r = x + y
+          if r > -1000000000000000000 & r < 1000000000000000000 then do
+            asp = base
+            return r * 2 + 1
+          end
+        end
+        when sel = 2 then do
+          r = x - y
+          if r > -1000000000000000000 & r < 1000000000000000000 then do
+            asp = base
+            return r * 2 + 1
+          end
+        end
+        when sel = 3 then do
+          if x > -1000000000 & x < 1000000000 & y > -1000000000 & y < 1000000000 then do
+            asp = base
+            return (x * y) * 2 + 1
+          end
+        end
+        when sel = 7 then do
+          asp = base
+          if x < y then return true_oop
+          return false_oop
+        end
+        when sel = 8 then do
+          asp = base
+          if x > y then return true_oop
+          return false_oop
+        end
+        when sel = 9 then do
+          asp = base
+          if x <= y then return true_oop
+          return false_oop
+        end
+        when sel = 10 then do
+          asp = base
+          if x >= y then return true_oop
+          return false_oop
+        end
+        when sel = 11 then do
+          asp = base
+          if x = y then return true_oop
+          return false_oop
+        end
+        when sel = 12 then do
+          asp = base
+          if x \= y then return true_oop
+          return false_oop
+        end
+        when sel = 5 then do
+          if y \= 0 then do
+            r = x % y
+            if (x // y \= 0) & ((x < 0) \= (y < 0)) then r = r - 1
+            asp = base
+            return r * 2 + 1
+          end
+        end
+        when sel = 6 then do
+          if y \= 0 then do
+            r = x // y
+            if r \= 0 & ((r < 0) \= (y < 0)) then r = r + y
+            asp = base
+            return r * 2 + 1
+          end
+        end
+        otherwise nop
+      end
+    end
+    if sel = 13 then do
+      asp = base
+      if rcv = v then return true_oop
+      return false_oop
+    end
+    if sel = 14 then do
+      asp = base
+      if rcv = v then return false_oop
+      return true_oop
+    end
+  end
+  if c = 0 then c = cof(rcv)
+  m = lookup(c, sel)
+  if m = 0 then r = send_dnu(rcv, sel, base, na)
+  else r = invoke(m, rcv, base, na)
+  asp = base
+  return r
+
+
+/* ---------------------------------------------------------------------
+   Number helpers
+   --------------------------------------------------------------------- */
+numkind: procedure = .int
+  arg x = .int
+  k = .int
+  if x // 2 \= 0 then return 1
+  k = o_kind[x % 2]
+  if k = 7 then return 2
+  if k = 3 then return 3
+  return 0
+
+tofloat: procedure = .float
+  arg x = .int
+  if x // 2 \= 0 then return intval(x) as .float
+  if o_kind[x % 2] = 7 then return o_s[x % 2] as .float
+  return o_f[x % 2]
+
+float_int: procedure = .int
+  arg f = .float
+  if f \= f then return 0
+  if f > -900000000000000000.0 & f < 900000000000000000.0 then return mkint(rxfloat..trunc(f) as .int)
+  return big_norm(float_to_istr(f))
+
+float_str: procedure = .string
+  arg f = .float
+  s = .string
+  p = .int
+  if f \= f then return "nan"
+  s = f as .string
+  p = pos("e", s)
+  if p = 0 then do
+    if pos(".", s) = 0 then s = s || ".0"
+    return s
+  end
+  if pos(".", left(s, p - 1)) = 0 then s = left(s, p - 1) || ".0" || substr(s, p)
+  s = translate(s, "", "+")
+  return s
+
+/* arithmetic on numbers; op: 1 add 2 sub 3 mul 4 div 5 idiv 6 mod 7 quo 8 rem */
+p_arith: procedure = .int
+  arg op = .int, x = .int, y = .int
+  kx = .int
+  ky = .int
+  fx = .float
+  fy = .float
+  q = .float
+  a = .int
+  b = .int
+  r = .int
+  sx = .string
+  sy = .string
+  kx = numkind(x)
+  ky = numkind(y)
+  if kx = 0 | ky = 0 then return 0
+  if kx = 3 | ky = 3 then do
+    fx = tofloat(x)
+    fy = tofloat(y)
+    select
+      when op = 1 then return mkfloat(fx + fy)
+      when op = 2 then return mkfloat(fx - fy)
+      when op = 3 then return mkfloat(fx * fy)
+      when op = 4 then do
+        if fy = 0.0 then return 0
+        return mkfloat(fx / fy)
+      end
+      otherwise do
+        if fy = 0.0 then return 0
+        if op = 5 then return float_int(rxfloat..floor(fx / fy))
+        if op = 6 then return mkfloat(fx - fy * rxfloat..floor(fx / fy))
+        if op = 7 then return float_int(rxfloat..trunc(fx / fy))
+        return mkfloat(fx - fy * rxfloat..trunc(fx / fy))
+      end
+    end
+  end
+  if kx = 1 & ky = 1 then do
+    a = intval(x)
+    b = intval(y)
+    select
+      when op = 1 then return big_norm0(a + b)
+      when op = 2 then return big_norm0(a - b)
+      when op = 3 then do
+        fx = a as .float
+        fy = b as .float
+        if rxfloat..fabs(fx * fy) < 900000000000000000.0 then return mkint(a * b)
+        return big_norm(smul(a as .string, b as .string))
+      end
+      otherwise do
+        if b = 0 then return 0
+        if op = 4 then do
+          if a // b = 0 then return mkint(a % b)
+          return 0
+        end
+        r = a % b
+        if op = 5 then do
+          if a // b \= 0 & ((a < 0) \= (b < 0)) then r = r - 1
+          return mkint(r)
+        end
+        if op = 6 then do
+          r = a // b
+          if r \= 0 & ((r < 0) \= (b < 0)) then r = r + b
+          return mkint(r)
+        end
+        if op = 7 then return mkint(r)
+        return mkint(a // b)
+      end
+    end
+  end
+  sx = num_str(x)
+  sy = num_str(y)
+  select
+    when op = 1 then return big_norm(sadd(sx, sy))
+    when op = 2 then return big_norm(ssub(sx, sy))
+    when op = 3 then return big_norm(smul(sx, sy))
+    otherwise do
+      if sy == "0" then return 0
+      call sdivmod sx, sy
+      if op = 4 then do
+        if sr == "0" then return big_norm(sq)
+        return 0
+      end
+      if op = 7 then return big_norm(sq)
+      if op = 8 then return big_norm(sr)
+      /* floor division and modulo */
+      if sr \== "0" & ((left(sx, 1) == "-") \= (left(sy, 1) == "-")) then do
+        if op = 5 then return big_norm(ssub(sq, "1"))
+        return big_norm(sadd(sr, sy))
+      end
+      if op = 5 then return big_norm(sq)
+      return big_norm(sr)
+    end
+  end
+  return 0
+
+big_norm0: procedure = .int
+  arg v = .int
+  if v > -1000000000000000000 & v < 1000000000000000000 then return mkint(v)
+  return big_norm(v as .string)
+
+/* comparison: returns -1/0/1, or 2 when not comparable */
+p_cmp: procedure = .int
+  arg x = .int, y = .int
+  kx = .int
+  ky = .int
+  fx = .float
+  fy = .float
+  kx = numkind(x)
+  ky = numkind(y)
+  if kx = 0 | ky = 0 then return 2
+  if kx = 3 | ky = 3 then do
+    fx = tofloat(x)
+    fy = tofloat(y)
+    if fx < fy then return -1
+    if fx > fy then return 1
+    if fx = fy then return 0
+    return 2
+  end
+  if kx = 1 & ky = 1 then do
+    if intval(x) < intval(y) then return -1
+    if intval(x) > intval(y) then return 1
+    return 0
+  end
+  return scmp(num_str(x), num_str(y))
+
+/* ---------------------------------------------------------------------
+   Dictionaries
+   --------------------------------------------------------------------- */
+dkey: procedure = .string
+  arg x = .int
+  k = .int
+  if x // 2 \= 0 then return "i" || intval(x)
+  k = o_kind[x % 2]
+  select
+    when k = 1 then return "s" || o_s[x % 2]
+    when k = 2 then return "y" || o_s[x % 2]
+    when k = 7 then return "i" || o_s[x % 2]
+    when k = 3 then do
+      if o_f[x % 2] = rxfloat..trunc(o_f[x % 2]) & rxfloat..fabs(o_f[x % 2]) < 900000000000000000.0 then return "i" || (rxfloat..trunc(o_f[x % 2]) as .int)
+      return "f" || o_f[x % 2]
+    end
+    when k = 5 then return "c" || o_x[x % 2]
+    otherwise nop
+  end
+  return "o" || x
+
+dict_new: procedure = .int
+  arg c = .int
+  o = .int
+  d = .int
+  nd0 = nd0 + 1
+  d = nd0
+  dd_head[d] = 0
+  dd_tail[d] = 0
+  dd_n[d] = 0
+  o = newobj(c, 8, c_ninst[c])
+  o_x[o % 2] = d
+  return o
+
+dict_find: procedure = .int
+  arg o = .int, key = .int
+  v = .string
+  v = dmap[o_x[o % 2] || "|" || dkey(key)]
+  if v == "" then return 0
+  return v as .int
+
+dict_put: procedure = .void
+  arg o = .int, key = .int, val = .int
+  e = .int
+  d = .int
+  e = dict_find(o, key)
+  if e > 0 then do
+    de_val[e] = val
+    return
+  end
+  d = o_x[o % 2]
+  ne = ne + 1
+  de_key[ne] = key
+  de_val[ne] = val
+  de_next[ne] = 0
+  de_live[ne] = 1
+  if dd_tail[d] = 0 then dd_head[d] = ne
+  else de_next[dd_tail[d]] = ne
+  dd_tail[d] = ne
+  dd_n[d] = dd_n[d] + 1
+  dmap[d || "|" || dkey(key)] = ne
+  return
+
+dict_remove: procedure = .int
+  arg o = .int, key = .int
+  e = .int
+  d = .int
+  e = dict_find(o, key)
+  if e = 0 then return 0
+  d = o_x[o % 2]
+  de_live[e] = 0
+  dd_n[d] = dd_n[d] - 1
+  dmap[d || "|" || dkey(key)] = ""
+  return e
+
+/* ---------------------------------------------------------------------
+   Exceptions
+   --------------------------------------------------------------------- */
+/* does handler class spec h (class or ExceptionSet array) match exception ex ? */
+exc_matches: procedure = .int
+  arg h = .int, ex = .int
+  c = .int
+  i = .int
+  n = .int
+  if h // 2 \= 0 then return 0
+  if o_kind[h % 2] = 9 then return inherits(cof(ex), o_x[h % 2])
+  if o_kind[h % 2] = 4 then do
+    n = o_n[h % 2]
+    do i = 0 to n - 1
+      if exc_matches(sl[o_slot[h % 2] + i], ex) = 1 then return 1
+    end
+  end
+  return 0
+
+/* signal ex, looking for handlers from index start downwards */
+do_signal: procedure = .int
+  arg ex = .int, start = .int, fresh = .int
+  k = .int
+  sig = .int
+  oldtop = .int
+  v = .int
+  hb = .int
+  base = .int
+  m = .int
+  if fresh = 1 then do
+    sigcount = sigcount + 1
+    sig = sigcount
+    call slot_put ex, 2, mkint(sig)
+  end
+  else sig = intval(slot_get(ex, 2))
+  k = 0
+  do v = start to 1 by -1
+    if exc_matches(h_cls[v], ex) = 1 then do
+      k = v
+      leave
+    end
+  end
+  if k = 0 then do
+    /* unhandled */
+    base = asp
+    v = send_sel(ex, 27, base, 0)
+    asp = base
+    if unw > 0 then return 0
+    return v
+  end
+  oldtop = htop
+  htop = k - 1
+  call slot_put ex, 1, mkint(k)
+  hb = h_blk[k]
+  base = asp
+  if n_b[o_x[hb % 2]] = 0 then v = call_block(hb, base, 0)
+  else do
+    asp = asp + 1
+    ast[asp] = ex
+    v = call_block(hb, base, 1)
+    asp = base
+  end
+  htop = oldtop
+  if unw = 0 then do
+    /* the handler block completed: return its value from on:do: */
+    unw = 2
+    unw_t = h_id[k]
+    unw_v = v
+    return 0
+  end
+  if unw = 4 & unw_t = sig then do
+    unw = 0
+    return unw_v
+  end
+  return 0
+
+/* ---------------------------------------------------------------------
+   Primitive dispatch
+   --------------------------------------------------------------------- */
+prim: procedure = .int
+  arg p = .int, rcv = .int, base = .int, na = .int
+  if p < 51 then return prim_a(p, rcv, base, na)
+  if p < 88 then return prim_b(p, rcv, base, na)
+  return prim_c(p, rcv, base, na)
+
+/* numbers, objects, reflection */
+prim_a: procedure = .int
+  arg p = .int, rcv = .int, base = .int, na = .int
+  a1 = .int
+  a2 = .int
+  r = .int
+  c = .int
+  i = .int
+  k = .int
+  s = .string
+  x = .float
+  o = .int
+  a1 = ast[base + 1]
+  a2 = ast[base + 2]
+  select
+    when p = 1 then return p_arith(1, rcv, a1)
+    when p = 2 then return p_arith(2, rcv, a1)
+    when p = 3 then return p_arith(3, rcv, a1)
+    when p = 4 then return p_arith(4, rcv, a1)
+    when p = 5 then return p_arith(5, rcv, a1)
+    when p = 6 then return p_arith(6, rcv, a1)
+    when p = 7 then return p_arith(7, rcv, a1)
+    when p = 8 then return p_arith(8, rcv, a1)
+    when p = 9 | p = 10 | p = 11 | p = 12 then do
+      r = p_cmp(rcv, a1)
+      if r = 2 then return 0
+      if p = 9 then return mkbool(r < 0)
+      if p = 10 then return mkbool(r > 0)
+      if p = 11 then return mkbool(r <= 0)
+      return mkbool(r >= 0)
+    end
+    when p = 13 | p = 14 then do
+      r = p_cmp(rcv, a1)
+      if p = 13 then return mkbool(r = 0)
+      return mkbool(r \= 0)
+    end
+    when p = 15 then return mkbool(rcv = a1)
+    when p = 16 then return mkbool(rcv \= a1)
+    when p = 17 then return c_oop[cof(rcv)]
+    when p = 18 then do
+      if rcv // 2 \= 0 then return mkint(0)
+      k = o_kind[rcv % 2]
+      if k = 1 | k = 2 then return mkint(length(o_s[rcv % 2]))
+      if k = 4 | k = 0 then return mkint(o_n[rcv % 2] - c_ninst[o_cls[rcv % 2]])
+      return mkint(0)
+    end
+    when p = 19 then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      k = o_kind[rcv % 2]
+      if k = 1 | k = 2 then do
+        if i < 1 | i > length(o_s[rcv % 2]) then return 0
+        return mkchar(c2d(substr(o_s[rcv % 2], i, 1)))
+      end
+      c = c_ninst[o_cls[rcv % 2]]
+      if i < 1 | i > o_n[rcv % 2] - c then return 0
+      return sl[o_slot[rcv % 2] + c + i - 1]
+    end
+    when p = 20 then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      k = o_kind[rcv % 2]
+      if k = 1 then do
+        if i < 1 | i > length(o_s[rcv % 2]) | a2 // 2 \= 0 then return 0
+        if o_kind[a2 % 2] \= 5 then return 0
+        o_s[rcv % 2] = left(o_s[rcv % 2], i - 1) || d2c(o_x[a2 % 2]) || substr(o_s[rcv % 2], i + 1)
+        return a2
+      end
+      if k = 2 then return 0
+      c = c_ninst[o_cls[rcv % 2]]
+      if i < 1 | i > o_n[rcv % 2] - c then return 0
+      sl[o_slot[rcv % 2] + c + i - 1] = a2
+      return a2
+    end
+    when p = 21 then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i < 1 | i > o_n[rcv % 2] then return 0
+      return sl[o_slot[rcv % 2] + i - 1]
+    end
+    when p = 22 then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i < 1 | i > o_n[rcv % 2] then return 0
+      sl[o_slot[rcv % 2] + i - 1] = a2
+      return a2
+    end
+    when p = 23 then do
+      if rcv // 2 \= 0 then return rcv
+      return mkint(rcv % 2)
+    end
+    when p = 24 | p = 25 then do
+      s = strof(a1)
+      if s == "" | isstr(a1) = 0 then return 0
+      k = selid(s)
+      if p = 24 then do
+        /* shift the arguments down one place */
+        do i = 2 to na
+          ast[base + i - 1] = ast[base + i]
+        end
+        asp = base + na - 1
+        r = send_sel(rcv, k, base, na - 1)
+        asp = base
+        return r
+      end
+      if a2 // 2 \= 0 then return 0
+      c = o_n[a2 % 2]
+      asp = base
+      do i = 0 to c - 1
+        asp = asp + 1
+        ast[asp] = sl[o_slot[a2 % 2] + i]
+      end
+      r = send_sel(rcv, k, base, c)
+      asp = base
+      return r
+    end
+    when p = 26 then do
+      if a1 // 2 \= 0 then return 0
+      if o_kind[a1 % 2] \= 9 & o_kind[a1 % 2] \= 10 then return 0
+      return mkbool(inherits(cof(rcv), o_x[a1 % 2]))
+    end
+    when p = 27 then do
+      if a1 // 2 \= 0 then return 0
+      return mkbool(cof(rcv) = o_x[a1 % 2])
+    end
+    when p = 28 then do
+      s = strof(a1)
+      if isstr(a1) = 0 then return 0
+      return mkbool(lookup(cof(rcv), selid(s)) > 0)
+    end
+    when p = 29 then return shallow_copy(rcv)
+    when p = 30 then do
+      if rcv // 2 \= 0 then return 0
+      return new_instance(o_x[rcv % 2], 0)
+    end
+    when p = 31 then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      if intval(a1) < 0 then return 0
+      return new_instance(o_x[rcv % 2], intval(a1))
+    end
+    when p = 32 then do
+      if a1 // 2 = 0 then return 0
+      k = intval(a1)
+      if numkind(rcv) = 0 then return 0
+      x = tofloat(rcv)
+      select
+        when k = 1 then do
+          if x < 0.0 then return 0
+          return mkfloat(rxfloat..sqrt(x))
+        end
+        when k = 2 then return mkfloat(rxfloat..sin(x))
+        when k = 3 then return mkfloat(rxfloat..cos(x))
+        when k = 4 then return mkfloat(rxfloat..tan(x))
+        when k = 5 then return mkfloat(rxfloat..atan(x))
+        when k = 6 then do
+          if x <= 0.0 then return 0
+          return mkfloat(rxfloat..log(x))
+        end
+        when k = 7 then return mkfloat(rxfloat..exp(x))
+        when k = 8 then do
+          if x <= 0.0 then return 0
+          return mkfloat(rxfloat..log10(x))
+        end
+        when k = 9 then return mkfloat(rxfloat..asin(x))
+        when k = 10 then return mkfloat(rxfloat..acos(x))
+        when k = 11 then do
+          if numkind(a2) = 0 then return 0
+          return mkfloat(rxfloat..pow(x, tofloat(a2)))
+        end
+        otherwise return 0
+      end
+    end
+    when p = 33 | p = 34 | p = 35 | p = 36 then do
+      k = numkind(rcv)
+      if k = 1 | k = 2 then return rcv
+      if k \= 3 then return 0
+      x = o_f[rcv % 2]
+      if p = 33 then return float_int(rxfloat..trunc(x))
+      if p = 34 then return float_int(rxfloat..floor(x))
+      if p = 35 then return float_int(rxfloat..ceil(x))
+      if x >= 0.0 then return float_int(rxfloat..floor(x + 0.5))
+      return float_int(rxfloat..ceil(x - 0.5))
+    end
+    when p = 37 then do
+      if numkind(rcv) = 0 then return 0
+      return mkfloat(tofloat(rcv))
+    end
+    when p = 38 | p = 39 | p = 40 then do
+      if rcv // 2 = 0 | a1 // 2 = 0 then return 0
+      return bitop(p, intval(rcv), intval(a1))
+    end
+    when p = 41 then do
+      if rcv // 2 = 0 | a1 // 2 = 0 then return 0
+      k = intval(a1)
+      if k >= 0 then do
+        o = rcv
+        do i = 1 to k
+          o = p_arith(3, o, mkint(2))
+          if o = 0 then return 0
+        end
+        return o
+      end
+      o = rcv
+      do i = 1 to 0 - k
+        o = p_arith(5, o, mkint(2))
+      end
+      return o
+    end
+    when p = 42 then do
+      k = numkind(rcv)
+      if k = 1 then return mkstr(intval(rcv) as .string)
+      if k = 2 then return mkstr(o_s[rcv % 2])
+      if k = 3 then return mkstr(float_str(o_f[rcv % 2]))
+      return 0
+    end
+    when p = 43 then do
+      if numkind(rcv) \= 1 | a1 // 2 = 0 then return 0
+      return mkstr(radix_str(intval(rcv), intval(a1)))
+    end
+    when p = 44 then do
+      k = numkind(rcv)
+      return mkbool(k = 1 | k = 2)
+    end
+    when p = 45 then return mkbool(numkind(rcv) = 3)
+    when p = 46 then return mkbool(kindof(rcv) = 1 | kindof(rcv) = 2)
+    when p = 47 then return mkbool(kindof(rcv) = 2)
+    when p = 48 then return mkbool(kindof(rcv) = 5)
+    when p = 49 then return mkbool(numkind(rcv) > 0)
+    when p = 50 then do
+      if numkind(rcv) \= 1 then return 0
+      if intval(rcv) < 0 then return 0
+      return mkint(rxfloat..floor(rxfloat..sqrt(intval(rcv) as .float)) as .int)
+    end
+    otherwise return 0
+  end
+  return 0
+
+bitop: procedure = .int
+  arg p = .int, x = .int, y = .int
+  r = .int
+  m = .int
+  bx = .int
+  byy = .int
+  rb = .int
+  if x < 0 | y < 0 then return 0
+  r = 0
+  m = 1
+  do while x > 0 | y > 0
+    bx = x // 2
+    byy = y // 2
+    rb = (bx + byy) // 2
+    if p = 38 then rb = bx * byy
+    if p = 39 then do
+      rb = bx + byy
+      if rb > 1 then rb = 1
+    end
+    r = r + rb * m
+    m = m * 2
+    x = x % 2
+    y = y % 2
+  end
+  return mkint(r)
+
+radix_str: procedure = .string
+  arg n = .int, rdx = .int
+  digs = .string
+  s = .string
+  neg = .int
+  d = .int
+  digs = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  if rdx < 2 | rdx > 36 then rdx = 10
+  neg = 0
+  if n < 0 then do
+    neg = 1
+    n = 0 - n
+  end
+  if n = 0 then return "0"
+  s = ""
+  do while n > 0
+    d = n // rdx
+    s = substr(digs, d + 1, 1) || s
+    n = n % rdx
+  end
+  if neg = 1 then s = "-" || s
+  return s
+
+shallow_copy: procedure = .int
+  arg x = .int
+  k = .int
+  o = .int
+  i = .int
+  e = .int
+  c = .int
+  if x // 2 \= 0 then return x
+  k = o_kind[x % 2]
+  select
+    when k = 1 then do
+      o = newobj(o_cls[x % 2], 1, 0)
+      o_s[o % 2] = o_s[x % 2]
+      return o
+    end
+    when k = 2 | k = 5 | k = 9 | k = 10 | k = 6 then return x
+    when k = 3 then return mkfloat(o_f[x % 2])
+    when k = 7 then return x
+    when k = 8 then do
+      o = dict_new(o_cls[x % 2])
+      e = dd_head[o_x[x % 2]]
+      do while e > 0
+        if de_live[e] = 1 then call dict_put o, de_key[e], de_val[e]
+        e = de_next[e]
+      end
+      do i = 0 to o_n[x % 2] - 1
+        sl[o_slot[o % 2] + i] = sl[o_slot[x % 2] + i]
+      end
+      return o
+    end
+    otherwise nop
+  end
+  o = newobj(o_cls[x % 2], k, o_n[x % 2])
+  do i = 0 to o_n[x % 2] - 1
+    sl[o_slot[o % 2] + i] = sl[o_slot[x % 2] + i]
+  end
+  o_x[o % 2] = o_x[x % 2]
+  return o
+
+/* new instance of class c, with n indexed slots */
+new_instance: procedure = .int
+  arg c = .int, n = .int
+  k = .int
+  o = .int
+  k = c_kind[c]
+  select
+    when k = 0 then do
+      if n > 0 then return newobj(c, 4, c_ninst[c] + n)
+      return newobj(c, 0, c_ninst[c])
+    end
+    when k = 4 then return newobj(c, 4, c_ninst[c] + n)
+    when k = 1 then do
+      o = newobj(c, 1, 0)
+      o_s[o % 2] = copies(" ", n)
+      return o
+    end
+    when k = 8 then return dict_new(c)
+    when k = 3 then return mkfloat(0.0)
+    otherwise return 0
+  end
+  return 0
+
+/* strings, symbols, characters, arrays, dictionaries */
+prim_b: procedure = .int
+  arg p = .int, rcv = .int, base = .int, na = .int
+  acc = .string
+  a1 = .int
+  a2 = .int
+  a3 = .int
+  s = .string
+  t = .string
+  i = .int
+  j = .int
+  k = .int
+  r = .int
+  n = .int
+  o = .int
+  e = .int
+  c = .int
+  a1 = ast[base + 1]
+  a2 = ast[base + 2]
+  a3 = ast[base + 3]
+  select
+    when p = 51 then do
+      if isstr(rcv) = 0 then return 0
+      return mkint(length(o_s[rcv % 2]))
+    end
+    when p = 52 then do
+      if isstr(rcv) = 0 | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i < 1 | i > length(o_s[rcv % 2]) then return 0
+      return mkchar(c2d(substr(o_s[rcv % 2], i, 1)))
+    end
+    when p = 53 then do
+      if kindof(rcv) \= 1 | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i < 1 | i > length(o_s[rcv % 2]) | kindof(a2) \= 5 then return 0
+      o_s[rcv % 2] = left(o_s[rcv % 2], i - 1) || d2c(o_x[a2 % 2]) || substr(o_s[rcv % 2], i + 1)
+      return a2
+    end
+    when p = 54 then do
+      if isstr(rcv) = 0 | isstr(a1) = 0 then return 0
+      return mkstr(o_s[rcv % 2] || o_s[a1 % 2])
+    end
+    when p = 55 then do
+      if isstr(rcv) = 0 | a1 // 2 = 0 | a2 // 2 = 0 then return 0
+      i = intval(a1)
+      j = intval(a2)
+      if j < i then do
+        if i >= 1 & i <= length(o_s[rcv % 2]) + 1 & j = i - 1 then return mkstr("")
+        return 0
+      end
+      if i < 1 | j > length(o_s[rcv % 2]) then return 0
+      return mkstr(substr(o_s[rcv % 2], i, j - i + 1))
+    end
+    when p = 56 then do
+      if isstr(rcv) = 0 | isstr(a1) = 0 then return false_oop
+      if o_kind[rcv % 2] \= o_kind[a1 % 2] then return false_oop
+      return mkbool(o_s[rcv % 2] == o_s[a1 % 2])
+    end
+    when p = 57 | p = 135 then do
+      if isstr(rcv) = 0 | isstr(a1) = 0 then return 0
+      s = o_s[rcv % 2]
+      t = o_s[a1 % 2]
+      if p = 135 then do
+        if s == t then return mkint(0)
+        if s << t then return mkint(-1)
+        return mkint(1)
+      end
+      return mkbool(s << t)
+    end
+    when p = 58 then do
+      if isstr(rcv) = 0 then return 0
+      s = o_s[rcv % 2]
+      n = length(s)
+      r = n
+      do i = 1 to min(n, 24)
+        r = (r * 31 + c2d(substr(s, i, 1))) // 1000000007
+      end
+      return mkint(r)
+    end
+    when p = 59 then do
+      if isstr(rcv) = 0 then return 0
+      return mksym(o_s[rcv % 2])
+    end
+    when p = 60 then do
+      if isstr(rcv) = 0 then return 0
+      if o_kind[rcv % 2] = 1 then return rcv
+      return mkstr(o_s[rcv % 2])
+    end
+    when p = 61 then do
+      if isstr(rcv) = 0 then return 0
+      if kindof(rcv) = 2 then return mksym(upper(o_s[rcv % 2]))
+      return mkstr(upper(o_s[rcv % 2]))
+    end
+    when p = 62 then do
+      if isstr(rcv) = 0 then return 0
+      if kindof(rcv) = 2 then return mksym(lower(o_s[rcv % 2]))
+      return mkstr(lower(o_s[rcv % 2]))
+    end
+    when p = 63 then do
+      if isstr(rcv) = 0 then return 0
+      if kindof(a1) = 5 then return mkint(pos(d2c(o_x[a1 % 2]), o_s[rcv % 2]))
+      if isstr(a1) = 1 then do
+        if na >= 2 & a2 // 2 \= 0 then i = intval(a2)
+        else i = 1
+        if i < 1 then i = 1
+        if o_s[a1 % 2] == "" then return mkint(0)
+        return mkint(pos(o_s[a1 % 2], o_s[rcv % 2], i))
+      end
+      return 0
+    end
+    when p = 64 then do
+      if isstr(rcv) = 0 | isstr(a1) = 0 | isstr(a2) = 0 then return 0
+      s = o_s[rcv % 2]
+      t = o_s[a1 % 2]
+      if t == "" then return mkstr(s)
+      acc = ""
+      i = 1
+      do forever
+        j = pos(t, s, i)
+        if j = 0 then leave
+        acc = acc || substr(s, i, j - i) || o_s[a2 % 2]
+        i = j + length(t)
+      end
+      return mkstr(acc || substr(s, i))
+    end
+    when p = 65 then do
+      if isstr(rcv) = 0 then return 0
+      return parse_number(o_s[rcv % 2])
+    end
+    when p = 66 then do
+      if isstr(rcv) = 0 then return 0
+      s = o_s[rcv % 2]
+      i = verify(s, " " || '09'x || '0a'x || '0d'x, "N")
+      if i = 0 then return mkstr("")
+      j = length(s)
+      do while j > i & pos(substr(s, j, 1), " " || '09'x || '0a'x || '0d'x) > 0
+        j = j - 1
+      end
+      return mkstr(substr(s, i, j - i + 1))
+    end
+    when p = 67 then do
+      if isstr(rcv) = 0 then return 0
+      if na >= 1 & isstr(a1) = 1 then t = o_s[a1 % 2]
+      else if na >= 1 & kindof(a1) = 5 then t = d2c(o_x[a1 % 2])
+      else t = " " || '09'x || '0a'x || '0d'x
+      return split_str(o_s[rcv % 2], t)
+    end
+    when p = 68 then do
+      if isstr(rcv) = 0 then return 0
+      return mkstr(reverse(o_s[rcv % 2]))
+    end
+    when p = 69 then do
+      if a1 // 2 = 0 then return 0
+      return mkstr(copies(" ", max(0, intval(a1))))
+    end
+    when p = 70 then do
+      if kindof(rcv) \= 5 then return 0
+      return mkint(o_x[rcv % 2])
+    end
+    when p = 71 then do
+      if a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i < 0 | i > 255 then return 0
+      return mkchar(i)
+    end
+    when p = 72 then do
+      if a1 // 2 = 0 then return 0
+      return mkarray(max(0, intval(a1)))
+    end
+    when p = 73 then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      if o_kind[rcv % 2] \= 4 then return 0
+      i = intval(a1)
+      c = c_ninst[o_cls[rcv % 2]]
+      if i < 1 | i > o_n[rcv % 2] - c then return 0
+      return sl[o_slot[rcv % 2] + c + i - 1]
+    end
+    when p = 74 then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      if o_kind[rcv % 2] \= 4 then return 0
+      i = intval(a1)
+      c = c_ninst[o_cls[rcv % 2]]
+      if i < 1 | i > o_n[rcv % 2] - c then return 0
+      sl[o_slot[rcv % 2] + c + i - 1] = a2
+      return a2
+    end
+    when p = 75 then do
+      if rcv // 2 \= 0 then return 0
+      if o_kind[rcv % 2] \= 4 then return 0
+      return mkint(o_n[rcv % 2] - c_ninst[o_cls[rcv % 2]])
+    end
+    when p = 76 then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 | a2 // 2 = 0 then return 0
+      if o_kind[rcv % 2] \= 4 then return 0
+      i = intval(a1)
+      j = intval(a2)
+      c = c_ninst[o_cls[rcv % 2]]
+      if j < i then do
+        if j = i - 1 & i >= 1 then return mkarray(0)
+        return 0
+      end
+      if i < 1 | j > o_n[rcv % 2] - c then return 0
+      r = mkarray(j - i + 1)
+      do k = 0 to j - i
+        sl[o_slot[r % 2] + k] = sl[o_slot[rcv % 2] + c + i - 1 + k]
+      end
+      return r
+    end
+    when p = 77 then do
+      if rcv // 2 \= 0 then return 0
+      if o_kind[rcv % 2] \= 4 then return 0
+      c = c_ninst[o_cls[rcv % 2]]
+      do k = c to o_n[rcv % 2] - 1
+        sl[o_slot[rcv % 2] + k] = a1
+      end
+      return rcv
+    end
+    when p = 78 then do
+      /* replaceFrom: start to: stop with: coll startingAt: repStart */
+      if rcv // 2 \= 0 | a1 // 2 = 0 | a2 // 2 = 0 | a3 // 2 \= 0 then return 0
+      i = intval(a1)
+      j = intval(a2)
+      e = ast[base + 4]
+      if e // 2 = 0 then return 0
+      k = intval(e)
+      n = j - i + 1
+      if n <= 0 then return rcv
+      if o_kind[rcv % 2] = 1 & isstr(a3) = 1 then do
+        if i < 1 | j > length(o_s[rcv % 2]) | k < 1 | k + n - 1 > length(o_s[a3 % 2]) then return 0
+        o_s[rcv % 2] = left(o_s[rcv % 2], i - 1) || substr(o_s[a3 % 2], k, n) || substr(o_s[rcv % 2], j + 1)
+        return rcv
+      end
+      if o_kind[rcv % 2] = 4 & kindof(a3) = 4 then do
+        c = c_ninst[o_cls[rcv % 2]]
+        if i < 1 | j > o_n[rcv % 2] - c | k < 1 | k + n - 1 > o_n[a3 % 2] - c_ninst[o_cls[a3 % 2]] then return 0
+        if rcv = a3 & k < i then do
+          do e = n - 1 to 0 by -1
+            sl[o_slot[rcv % 2] + c + i - 1 + e] = sl[o_slot[a3 % 2] + c + k - 1 + e]
+          end
+        end
+        else do
+          do e = 0 to n - 1
+            sl[o_slot[rcv % 2] + c + i - 1 + e] = sl[o_slot[a3 % 2] + c_ninst[o_cls[a3 % 2]] + k - 1 + e]
+          end
+        end
+        return rcv
+      end
+      return 0
+    end
+    when p = 79 then do
+      if rcv // 2 \= 0 then return 0
+      return dict_new(o_x[rcv % 2])
+    end
+    when p = 80 then do
+      if kindof(rcv) \= 8 then return 0
+      e = dict_find(rcv, a1)
+      if e = 0 then return 0
+      return de_val[e]
+    end
+    when p = 81 then do
+      if kindof(rcv) \= 8 then return 0
+      call dict_put rcv, a1, a2
+      return a2
+    end
+    when p = 82 then do
+      if kindof(rcv) \= 8 then return 0
+      return mkbool(dict_find(rcv, a1) > 0)
+    end
+    when p = 83 then do
+      if kindof(rcv) \= 8 then return 0
+      e = dict_remove(rcv, a1)
+      if e = 0 then return 0
+      return de_val[e]
+    end
+    when p = 84 | p = 85 then do
+      if kindof(rcv) \= 8 then return 0
+      n = dd_n[o_x[rcv % 2]]
+      r = mkarray(n)
+      e = dd_head[o_x[rcv % 2]]
+      k = 0
+      do while e > 0
+        if de_live[e] = 1 then do
+          if p = 84 then sl[o_slot[r % 2] + k] = de_key[e]
+          else sl[o_slot[r % 2] + k] = de_val[e]
+          k = k + 1
+        end
+        e = de_next[e]
+      end
+      return r
+    end
+    when p = 87 then do
+      if kindof(rcv) \= 8 then return 0
+      return shallow_copy(rcv)
+    end
+    when p = 86 then do
+      if kindof(rcv) \= 8 then return 0
+      return mkint(dd_n[o_x[rcv % 2]])
+    end
+    otherwise return 0
+  end
+  return 0
+
+split_str: procedure = .int
+  arg s = .string, seps = .string
+  n = .int
+  i = .int
+  j = .int
+  r = .int
+  k = .int
+  tmp = .string[]
+  n = 0
+  i = 1
+  do while i <= length(s)
+    /* skip separators */
+    do while i <= length(s) & pos(substr(s, i, 1), seps) > 0
+      i = i + 1
+    end
+    if i > length(s) then leave
+    j = i
+    do while j <= length(s) & pos(substr(s, j, 1), seps) = 0
+      j = j + 1
+    end
+    n = n + 1
+    tmp[n] = substr(s, i, j - i)
+    i = j
+  end
+  r = mkarray(n)
+  do k = 1 to n
+    sl[o_slot[r % 2] + k - 1] = mkstr(tmp[k])
+  end
+  return r
+
+parse_number: procedure = .int
+  arg s0 = .string
+  s = .string
+  neg = .int
+  q = .int
+  p = .int
+  isf = .int
+  s = strip(s0)
+  if s == "" then return nil_oop
+  neg = 0
+  if left(s, 1) == "-" then do
+    neg = 1
+    s = substr(s, 2)
+  end
+  q = verify(s, "0123456789", "N")
+  if q = 0 then do
+    if s == "" then return nil_oop
+    if neg = 1 then s = "-" || s
+    return big_norm(s)
+  end
+  if q = 1 then return nil_oop
+  /* real number */
+  isf = 0
+  if substr(s, q, 1) == "." & isdigit(substr(s, q + 1, 1)) = 1 then do
+    p = verify(s, "0123456789", "N", q + 1)
+    if p = 0 then p = length(s) + 1
+    q = p
+    isf = 1
+  end
+  if upper(substr(s, q, 1)) == "E" then do
+    p = q + 1
+    if substr(s, p, 1) == "-" | substr(s, p, 1) == "+" then p = p + 1
+    q = verify(s, "0123456789", "N", p)
+    if q = 0 then q = length(s) + 1
+    isf = 1
+  end
+  s = left(s, q - 1)
+  if isf = 1 then do
+    if neg = 1 then return mkfloat(0.0 - (upper(s) as .float))
+    return mkfloat(upper(s) as .float)
+  end
+  if neg = 1 then s = "-" || s
+  return big_norm(s)
+
+/* blocks, exceptions, classes, system */
+prim_c: procedure = .int
+  arg p = .int, rcv = .int, base = .int, na = .int
+  a1 = .int
+  a2 = .int
+  s = .string
+  t = .string
+  i = .int
+  j = .int
+  k = .int
+  r = .int
+  n = .int
+  o = .int
+  e = .int
+  c = .int
+  v = .int
+  id = .int
+  oldtop = .int
+  sv_u = .int
+  sv_t = .int
+  sv_v = .int
+  b2 = .int
+  a1 = ast[base + 1]
+  a2 = ast[base + 2]
+  select
+    when p = 88 then do
+      if kindof(rcv) \= 6 then return 0
+      if n_b[o_x[rcv % 2]] \= na then do
+        call st_error rcv, "wrong argument count"
+        return 0
+      end
+      return call_block(rcv, base, na)
+    end
+    when p = 89 then do
+      if kindof(rcv) \= 6 | kindof(a1) \= 4 then return 0
+      n = o_n[a1 % 2] - c_ninst[o_cls[a1 % 2]]
+      if n_b[o_x[rcv % 2]] \= n then do
+        call st_error rcv, "wrong argument count"
+        return 0
+      end
+      b2 = asp
+      do i = 0 to n - 1
+        asp = asp + 1
+        ast[asp] = sl[o_slot[a1 % 2] + c_ninst[o_cls[a1 % 2]] + i]
+      end
+      r = call_block(rcv, b2, n)
+      asp = b2
+      return r
+    end
+    when p = 90 then do
+      if kindof(rcv) \= 6 then return 0
+      return mkint(n_b[o_x[rcv % 2]])
+    end
+    when p = 91 | p = 92 then do
+      if kindof(rcv) \= 6 then return 0
+      do forever
+        v = call_block(rcv, asp, 0)
+        if unw > 0 then return 0
+        if p = 91 & v \= true_oop then leave
+        if p = 92 & v \= false_oop then leave
+        if na >= 1 then do
+          v = call_block(a1, asp, 0)
+          if unw > 0 then return 0
+        end
+      end
+      return nil_oop
+    end
+    when p = 93 then do
+      /* rcv on: exceptionClass do: handlerBlock */
+      if kindof(rcv) \= 6 then return 0
+      oldtop = htop
+      do forever
+        hid = hid + 1
+        id = hid
+        htop = oldtop + 1
+        h_cls[htop] = a1
+        h_blk[htop] = a2
+        h_id[htop] = id
+        v = call_block(rcv, asp, 0)
+        htop = oldtop
+        if unw = 2 & unw_t = id then do
+          unw = 0
+          return unw_v
+        end
+        if unw = 3 & unw_t = id then do
+          unw = 0
+          iterate
+        end
+        if unw > 0 then return 0
+        return v
+      end
+    end
+    when p = 94 | p = 95 then do
+      if kindof(rcv) \= 6 then return 0
+      v = call_block(rcv, asp, 0)
+      if p = 95 & unw = 0 then return v
+      sv_u = unw
+      sv_t = unw_t
+      sv_v = unw_v
+      oldtop = htop
+      unw = 0
+      r = call_block(a1, asp, 0)
+      htop = oldtop
+      if unw = 0 then do
+        unw = sv_u
+        unw_t = sv_t
+        unw_v = sv_v
+      end
+      if unw > 0 then return 0
+      return v
+    end
+    when p = 96 then return do_signal(rcv, htop, 1)
+    when p = 97 then do
+      /* rcv resume: value */
+      unw = 4
+      unw_t = intval(slot_get(rcv, 2))
+      unw_v = a1
+      return 0
+    end
+    when p = 98 then do
+      k = intval(slot_get(rcv, 1))
+      if k < 1 | k > htop + 50 then do
+        call st_error rcv, "return: outside of a handler"
+        return 0
+      end
+      unw = 2
+      unw_t = h_id[k]
+      unw_v = a1
+      return 0
+    end
+    when p = 99 then do
+      k = intval(slot_get(rcv, 1))
+      unw = 3
+      unw_t = h_id[k]
+      unw_v = nil_oop
+      return 0
+    end
+    when p = 100 | p = 101 then do
+      k = intval(slot_get(rcv, 1))
+      v = do_signal(rcv, k - 1, 0)
+      if unw > 0 then return 0
+      if p = 100 then do
+        unw = 2
+        unw_t = h_id[k]
+        unw_v = v
+        return 0
+      end
+      return v
+    end
+    when p = 103 then do
+      if rcv // 2 \= 0 then return 0
+      return mkstr(c_name[o_x[rcv % 2]])
+    end
+    when p = 104 then do
+      if rcv // 2 \= 0 then return 0
+      k = c_super[o_x[rcv % 2]]
+      if k = 0 then return nil_oop
+      return c_oop[k]
+    end
+    when p = 105 then do
+      if rcv // 2 \= 0 then return 0
+      s = strof(a1)
+      if s == "" then return 0
+      return c_oop[define_class(s, o_x[rcv % 2])]
+    end
+    when p = 106 then do
+      s = strof(a1)
+      if s == "" then return 0
+      call add_ivar o_x[rcv % 2], s
+      return rcv
+    end
+    when p = 107 then do
+      return mkstr(c_ivn[o_x[rcv % 2]])
+    end
+    when p = 108 then do
+      k = o_x[rcv % 2]
+      n = 0
+      do i = 1 to nsel
+        if cm[k * 2048 + i] > 0 then n = n + 1
+      end
+      r = mkarray(n)
+      j = 0
+      do i = 1 to nsel
+        if cm[k * 2048 + i] > 0 then do
+          sl[o_slot[r % 2] + j] = mksym(sel_name[i])
+          j = j + 1
+        end
+      end
+      return r
+    end
+    when p = 109 then do
+      s = strof(a1)
+      if s == "" then return 0
+      return mkbool(cm[o_x[rcv % 2] * 2048 + selid(s)] > 0)
+    end
+    when p = 112 then do
+      s = strof(a1)
+      if s == "" then return 0
+      k = o_x[rcv % 2]
+      if c_ismeta[k] = 1 then k = c_this[k]
+      if cvmap[k || "." || s] == "" then do
+        ng = ng + 1
+        g_val[ng] = nil_oop
+        g_name[ng] = s
+        cvmap[k || "." || s] = ng
+      end
+      return rcv
+    end
+    when p = 113 then do
+      s = strof(a1)
+      if s == "" then return 0
+      return mkbool(lookup(o_x[rcv % 2], selid(s)) > 0)
+    end
+    when p = 114 then do
+      k = o_x[rcv % 2]
+      n = 0
+      do i = 1 to nc
+        if c_super[i] = k & c_ismeta[i] = 0 then n = n + 1
+      end
+      r = mkarray(n)
+      j = 0
+      do i = 1 to nc
+        if c_super[i] = k & c_ismeta[i] = 0 then do
+          sl[o_slot[r % 2] + j] = c_oop[i]
+          j = j + 1
+        end
+      end
+      return r
+    end
+    when p = 116 then do
+      s = strof(a1)
+      if s == "" | gmap[s] == "" then return 0
+      return g_val[gcell(s)]
+    end
+    when p = 117 then do
+      s = strof(a1)
+      if s == "" then return 0
+      call gset s, a2
+      return a2
+    end
+    when p = 118 then do
+      s = strof(a1)
+      if s == "" then return 0
+      return mkbool(gmap[s] \== "")
+    end
+    when p = 119 then do
+      if isstr(a1) = 1 then call outs o_s[a1 % 2]
+      else if a1 // 2 \= 0 then call outs intval(a1) as .string
+      else return 0
+      return rcv
+    end
+    when p = 120 then do
+      r = read_stdin_line()
+      if r = 0 then return nil_oop
+      return r
+    end
+    when p = 121 then return mkbool(stdin_eof = 1)
+    when p = 122 then do
+      s = time("E")
+      return mkint(rxfloat..trunc((s as .float) * 1000.0) as .int)
+    end
+    when p = 137 then return mkint(0)
+    when p = 123 then do
+      call outs "halt" || '0a'x
+      unw = 5
+      return 0
+    end
+    when p = 124 then do
+      if a1 // 2 \= 0 then rc_exit = intval(a1)
+      unw = 6
+      return 0
+    end
+    when p = 126 then return mkbool(rcv = nil_oop)
+    when p = 128 then do
+      if isstr(rcv) = 1 then return mkstr(o_s[rcv % 2])
+      if numkind(rcv) > 0 then return prim_a(42, rcv, base, 0)
+      if kindof(rcv) = 5 then return mkstr(d2c(o_x[rcv % 2]))
+      return 0
+    end
+    when p = 127 then do
+      if isstr(a1) = 0 then return 0
+      return eval_string(o_s[a1 % 2])
+    end
+    when p = 130 then do
+      /* a1: 1 = print trace and abort, 2 = print trace only */
+      call print_trace
+      if a1 \= mkint(2) then unw = 5
+      return nil_oop
+    end
+    when p = 138 then do
+      /* printString: with padding - unused */
+      return 0
+    end
+    when p = 133 then do
+      rnd_state = (rnd_state * 1103515245 + 12345) // 2147483648
+      if rnd_state < 0 then rnd_state = 0 - rnd_state
+      if a1 // 2 \= 0 then do
+        if intval(a1) > 0 then return mkint(rnd_state // intval(a1) + 1)
+      end
+      return mkfloat(rnd_state as .float / 2147483648.0)
+    end
+    when p = 132 then return 0
+    when p = 131 then return 0
+    otherwise return 0
+  end
+  return 0
+
+read_stdin_line: procedure = .int
+  line = .string
+  e = .int
+  if stdin_eof = 1 then return 0
+  line = ""
+  assembler freadline line, h_in
+  assembler feof e, h_in
+  if e > 0 & length(line) = 0 then do
+    stdin_eof = 1
+    return 0
+  end
+  if right(line, 1) == '0d'x then line = left(line, length(line) - 1)
+  return mkstr(line)
+
+/* evaluate a string of statements; the value of the last one is returned */
+eval_string: procedure = .int
+  arg text = .string
+  sv_txt = .string
+  sv_tp = .int
+  sv_len = .int
+  sv_tk = .int
+  sv_ts = .string
+  sv_ti = .int
+  sv_tf = .float
+  sv_tpos = .int
+  sv_pkh = .int
+  sv_pkt = .int
+  sv_pks = .string
+  sv_pki = .int
+  sv_pkf = .float
+  sv_pkp = .int
+  sv_pe = .int
+  seq = .int
+  fb = .int
+  v = .int
+  sv_lvl = .int
+  sv_envn = .int
+  sv_cls = .int
+  sv_nx = .int
+  sv_txt = txt
+  sv_tp = tp
+  sv_len = tlen
+  sv_tk = tk
+  sv_ts = ts
+  sv_ti = ti
+  sv_tf = tf
+  sv_tpos = tpos
+  sv_pkh = pk_have
+  sv_pkt = pk_t
+  sv_pks = pk_s
+  sv_pki = pk_i
+  sv_pkf = pk_f
+  sv_pkp = pk_p
+  sv_pe = pe
+  sv_lvl = lvl
+  sv_envn = envn
+  sv_cls = r_cls
+  sv_nx = sc_max[1]
+  txt = text
+  tp = 1
+  tlen = length(text)
+  pk_have = 0
+  pe = 0
+  call advance
+  pm_ntemps = 0
+  if isbin("|") = 1 then pm_ntemps = parse_temps()
+  seq = parse_stmts(0)
+  v = nil_oop
+  if pe = 0 then do
+    call start_scope cls_UndefinedObject
+    call rs_seq seq
+    fb = alloc_frame(4 + sc_max[1])
+    vp[fb] = 0
+    vp[fb + 1] = fb
+    vp[fb + 2] = nil_oop
+    vp[fb + 3] = 0
+    call init_temps fb + 4, sc_max[1]
+    v = ev(seq, fb)
+    if unw = 1 then do
+      unw = 0
+      v = unw_v
+    end
+    if unw > 0 then v = nil_oop
+  end
+  txt = sv_txt
+  tp = sv_tp
+  tlen = sv_len
+  tk = sv_tk
+  ts = sv_ts
+  ti = sv_ti
+  tf = sv_tf
+  tpos = sv_tpos
+  pk_have = sv_pkh
+  pk_t = sv_pkt
+  pk_s = sv_pks
+  pk_i = sv_pki
+  pk_f = sv_pkf
+  pk_p = sv_pkp
+  pe = sv_pe
+  lvl = sv_lvl
+  envn = sv_envn
+  r_cls = sv_cls
+  return v
+
+
+/* ---------------------------------------------------------------------
+   Arbitrary-precision integers on decimal strings
+   --------------------------------------------------------------------- */
+mag_clean: procedure = .string
+  arg s = .string
+  p = .int
+  p = verify(s, "0", "N")
+  if p = 0 then return "0"
+  return substr(s, p)
+
+mag_cmp: procedure = .int
+  arg a = .string, b = .string
+  if length(a) < length(b) then return -1
+  if length(a) > length(b) then return 1
+  if a == b then return 0
+  if a << b then return -1
+  return 1
+
+mag_add: procedure = .string
+  arg a = .string, b = .string
+  r = .string
+  i = .int
+  j = .int
+  x = .int
+  y = .int
+  c = .int
+  s = .int
+  piece = .string
+  i = length(a)
+  j = length(b)
+  c = 0
+  r = ""
+  do while i > 0 | j > 0 | c > 0
+    x = 0
+    y = 0
+    if i > 0 then do
+      if i > 9 then x = substr(a, i - 8, 9) as .int
+      else x = substr(a, 1, i) as .int
+      i = i - 9
+    end
+    if j > 0 then do
+      if j > 9 then y = substr(b, j - 8, 9) as .int
+      else y = substr(b, 1, j) as .int
+      j = j - 9
+    end
+    s = x + y + c
+    if s >= 1000000000 then do
+      s = s - 1000000000
+      c = 1
+    end
+    else c = 0
+    piece = s as .string
+    if i > 0 | j > 0 | c > 0 then piece = right(copies("0", 9) || piece, 9)
+    r = piece || r
+  end
+  return mag_clean(r)
+
+/* a >= b */
+mag_sub: procedure = .string
+  arg a = .string, b = .string
+  r = .string
+  i = .int
+  j = .int
+  x = .int
+  y = .int
+  c = .int
+  s = .int
+  piece = .string
+  i = length(a)
+  j = length(b)
+  c = 0
+  r = ""
+  do while i > 0
+    if i > 9 then x = substr(a, i - 8, 9) as .int
+    else x = substr(a, 1, i) as .int
+    i = i - 9
+    y = 0
+    if j > 0 then do
+      if j > 9 then y = substr(b, j - 8, 9) as .int
+      else y = substr(b, 1, j) as .int
+      j = j - 9
+    end
+    s = x - y - c
+    if s < 0 then do
+      s = s + 1000000000
+      c = 1
+    end
+    else c = 0
+    piece = s as .string
+    if i > 0 then piece = right(copies("0", 9) || piece, 9)
+    r = piece || r
+  end
+  return mag_clean(r)
+
+mag_mul: procedure = .string
+  arg a = .string, b = .string
+  la = .int
+  lb = .int
+  i = .int
+  j = .int
+  k = .int
+  x = .int
+  c = .int
+  t = .int
+  r = .string
+  piece = .string
+  al0 = .int[]
+  bl0 = .int[]
+  rl = .int[]
+  if a == "0" | b == "0" then return "0"
+  la = 0
+  i = length(a)
+  do while i > 0
+    la = la + 1
+    if i > 9 then al0[la] = substr(a, i - 8, 9) as .int
+    else al0[la] = substr(a, 1, i) as .int
+    i = i - 9
+  end
+  lb = 0
+  i = length(b)
+  do while i > 0
+    lb = lb + 1
+    if i > 9 then bl0[lb] = substr(b, i - 8, 9) as .int
+    else bl0[lb] = substr(b, 1, i) as .int
+    i = i - 9
+  end
+  do k = 1 to la + lb
+    rl[k] = 0
+  end
+  do i = 1 to la
+    c = 0
+    x = al0[i]
+    do j = 1 to lb
+      t = x * bl0[j] + rl[i + j - 1] + c
+      c = t % 1000000000
+      rl[i + j - 1] = t // 1000000000
+    end
+    k = i + lb
+    do while c > 0
+      t = rl[k] + c
+      c = t % 1000000000
+      rl[k] = t // 1000000000
+      k = k + 1
+    end
+  end
+  k = la + lb
+  do while k > 1 & rl[k] = 0
+    k = k - 1
+  end
+  r = rl[k] as .string
+  do i = k - 1 to 1 by -1
+    piece = rl[i] as .string
+    r = r || right(copies("0", 9) || piece, 9)
+  end
+  return mag_clean(r)
+
+/* truncated division of magnitudes: quotient in bq, remainder in brm */
+mag_divmod: procedure = .void
+  arg a = .string, b = .string
+  i = .int
+  r = .string
+  q = .string
+  d = .int
+  qd = .int
+  if mag_cmp(a, b) < 0 then do
+    bq = "0"
+    brm = a
+    return
+  end
+  r = "0"
+  q = ""
+  do i = 1 to length(a)
+    r = mag_clean(r || substr(a, i, 1))
+    qd = 0
+    do while mag_cmp(r, b) >= 0
+      r = mag_sub(r, b)
+      qd = qd + 1
+    end
+    q = q || qd
+  end
+  bq = mag_clean(q)
+  brm = r
+  return
+
+/* signed string helpers: s is "123" or "-123" */
+sgn_split: procedure = .void
+  arg s = .string
+  if left(s, 1) == "-" then do
+    sg = -1
+    mg = substr(s, 2)
+  end
+  else do
+    sg = 1
+    mg = s
+  end
+  return
+
+sgn_make: procedure = .string
+  arg sgv = .int, mgv = .string
+  if mgv == "0" then return "0"
+  if sgv < 0 then return "-" || mgv
+  return mgv
+
+sadd: procedure = .string
+  arg a = .string, b = .string
+  sa = .int
+  sb = .int
+  ma = .string
+  mb = .string
+  c = .int
+  call sgn_split a
+  sa = sg
+  ma = mg
+  call sgn_split b
+  sb = sg
+  mb = mg
+  if sa = sb then return sgn_make(sa, mag_add(ma, mb))
+  c = mag_cmp(ma, mb)
+  if c = 0 then return "0"
+  if c > 0 then return sgn_make(sa, mag_sub(ma, mb))
+  return sgn_make(sb, mag_sub(mb, ma))
+
+sneg: procedure = .string
+  arg a = .string
+  if a == "0" then return "0"
+  if left(a, 1) == "-" then return substr(a, 2)
+  return "-" || a
+
+ssub: procedure = .string
+  arg a = .string, b = .string
+  return sadd(a, sneg(b))
+
+smul: procedure = .string
+  arg a = .string, b = .string
+  sa = .int
+  sb = .int
+  ma = .string
+  mb = .string
+  call sgn_split a
+  sa = sg
+  ma = mg
+  call sgn_split b
+  sb = sg
+  mb = mg
+  return sgn_make(sa * sb, mag_mul(ma, mb))
+
+/* truncated quotient and remainder: results in sq, sr */
+sdivmod: procedure = .void
+  arg a = .string, b = .string
+  sa = .int
+  sb = .int
+  ma = .string
+  mb = .string
+  call sgn_split a
+  sa = sg
+  ma = mg
+  call sgn_split b
+  sb = sg
+  mb = mg
+  call mag_divmod ma, mb
+  sq = sgn_make(sa * sb, bq)
+  sr = sgn_make(sa, brm)
+  return
+
+scmp: procedure = .int
+  arg a = .string, b = .string
+  sa = .int
+  sb = .int
+  ma = .string
+  mb = .string
+  call sgn_split a
+  sa = sg
+  ma = mg
+  call sgn_split b
+  sb = sg
+  mb = mg
+  if ma == "0" then sa = 0
+  if mb == "0" then sb = 0
+  if sa < sb then return -1
+  if sa > sb then return 1
+  if sa = 0 then return 0
+  if sa > 0 then return mag_cmp(ma, mb)
+  return mag_cmp(mb, ma)
+
+/* decimal string of an integer oop (small or large) */
+num_str: procedure = .string
+  arg x = .int
+  if x // 2 \= 0 then return intval(x) as .string
+  return o_s[x % 2]
+
+/* oop for an integer given as a decimal string */
+big_norm: procedure = .int
+  arg s0 = .string
+  s = .string
+  neg = .int
+  o = .int
+  s = s0
+  neg = 0
+  if left(s, 1) == "-" then do
+    neg = 1
+    s = substr(s, 2)
+  end
+  s = mag_clean(s)
+  if length(s) <= 18 then do
+    if neg = 1 then return mkint(0 - (s as .int))
+    return mkint(s as .int)
+  end
+  if neg = 1 then s = "-" || s
+  return mkbig(s)
+
+mkbig: procedure = .int
+  arg s = .string
+  o = .int
+  if length(s) <= 18 & left(s, 1) \== "-" then return mkint(s as .int)
+  if length(s) <= 19 & left(s, 1) == "-" then return mkint(0 - (substr(s, 2) as .int))
+  if left(s, 1) == "-" then o = newobj(cls_LargeNegativeInteger, 7, 0)
+  else o = newobj(cls_LargePositiveInteger, 7, 0)
+  o_s[o % 2] = s
+  return o
+
+big_float: procedure = .float
+  arg s = .string
+  return s as .float
+
+/* a float with a large magnitude -> integer string */
+float_to_istr: procedure = .string
+  arg x = .float
+  s = .string
+  p = .int
+  e = .int
+  m = .string
+  neg = .int
+  d = .int
+  neg = 0
+  if x < 0.0 then do
+    neg = 1
+    x = 0.0 - x
+  end
+  s = upper(x as .string)
+  p = pos("E", s)
+  if p = 0 then do
+    d = pos(".", s)
+    if d > 0 then s = left(s, d - 1)
+    return sgn_make2(neg, s)
+  end
+  e = substr(s, p + 1) as .int
+  m = left(s, p - 1)
+  d = pos(".", m)
+  if d > 0 then do
+    e = e - (length(m) - d)
+    m = left(m, d - 1) || substr(m, d + 1)
+  end
+  if e >= 0 then m = m || copies("0", e)
+  else m = left(m, max(length(m) + e, 1))
+  return sgn_make2(neg, mag_clean(m))
+
+sgn_make2: procedure = .string
+  arg neg = .int, m = .string
+  if m == "0" | neg = 0 then return m
+  return "-" || m
+

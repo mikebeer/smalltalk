@@ -1,0 +1,84 @@
+3
+4
+2
+found
+missing
+15
+Counter
+Counter class
+Metaclass
+Object
+'Counter'
+nil
+Counter
+false
+true
+false
+true
+SmallInteger
+LargePositiveInteger
+FloatD
+Fraction
+UndefinedObject
+True
+String
+Symbol
+Character
+BlockClosure
+Hello,42
+	x
+1
+2
+3
+4
+5
+hello
+('a' 'b' 'c' )
+('a' 'b' 'c' )
+3
+ell
+heLLo
+#hello
+2
+42
+3.5
+nil
+9
+false
+true
+6
+*****
+1 2 3 
+3 2 1 
+1, 2, 3
+(3 2 1 )
+3
+2
+1
+(1 4 9 )
+(1 $a 'str' #sym (1 2 ) (3 4 ) )
+(2 'two' #three )
+true
+false
+true
+false
+true
+1->2
+3@4
+4@5
+10000000000
+0.000015
+158
+5
+-5
+3
+4
+4
+3
+()
+()
+''
+42
+42
+true
+5

@@ -1,0 +1,15 @@
+#!/bin/sh
+# Launcher for the CREXX Smalltalk interpreter.
+#   ./smalltalk [file.st ...]       run files (or standard input)
+# The interpreter is compiled to bytecode on first use (about a minute),
+# afterwards it starts quickly.  Set CREXX to the crexx driver if it is not on your PATH.
+DIR=$(cd "$(dirname "$0")" && pwd)
+CREXX=${CREXX:-crexx}
+if [ ! -f "$DIR/smalltalk.rxbin" ] || [ "$DIR/smalltalk.crexx" -nt "$DIR/smalltalk.rxbin" ]; then
+  echo "smalltalk: compiling interpreter (first run only)..." >&2
+  "$CREXX" "$DIR/smalltalk.crexx" -noexec >/dev/null 2>&1 || {
+    echo "smalltalk: compilation failed - run: $CREXX $DIR/smalltalk.crexx -noexec" >&2
+    exit 2
+  }
+fi
+exec "$CREXX" "$DIR/smalltalk.crexx" -nocompile -args -L "$DIR/lib" "$@"

@@ -1,0 +1,470 @@
+
+/* ---------------------------------------------------------------------
+   Methods, classes and the file-in loop
+   --------------------------------------------------------------------- */
+skip_pragma: procedure = .void
+  /* at the "<" of a pragma */
+  nme = .string
+  call advance
+  if tk = TK_KW & ts == "primitive:" then do
+    call advance
+    if tk = TK_IDENT then do
+      pm_prim = wordpos(ts, prim_names)
+      if pm_prim = 0 then call perr "unknown primitive " || ts
+    end
+    else if tk = TK_INT then pm_prim = ti
+    call advance
+  end
+  do while tk \= TK_EOF & isbin(">") = 0
+    call advance
+  end
+  if tk \= TK_EOF then call advance
+  return
+
+/* method body after the "[": temps, pragmas, statements, up to "]" */
+parse_method_body: procedure = .int
+  body = .int
+  pm_prim = 0
+  pm_tfirst = nnl + 1
+  pm_ntemps = 0
+  do forever
+    if isbin("|") = 1 | isbin("||") = 1 then pm_ntemps = pm_ntemps + parse_temps()
+    else if isbin("<") = 1 then call skip_pragma
+    else leave
+  end
+  body = parse_stmts(TK_RB)
+  if tk = TK_RB then call advance
+  else call perr "missing ] at end of method"
+  return body
+
+/* parse "pattern [ body ]" and install it in class c */
+parse_method_def: procedure = .void
+  arg c = .int
+  sel = .string
+  np = .int
+  pfirst = .int
+  body = .int
+  tfirst = .int
+  ntemps = .int
+  prim = .int
+  startp = .int
+  startp = tpos
+  sel = ""
+  np = 0
+  pfirst = nnl + 1
+  if tk = TK_IDENT then do
+    sel = ts
+    call advance
+  end
+  else if tk = TK_BIN then do
+    sel = ts
+    call advance
+    if tk = TK_IDENT then do
+      nnl = nnl + 1
+      nl_name[nnl] = ts
+      np = 1
+      call advance
+    end
+    else call perr "binary method parameter expected"
+  end
+  else if tk = TK_KW then do
+    do while tk = TK_KW
+      sel = sel || ts
+      call advance
+      if tk = TK_IDENT then do
+        nnl = nnl + 1
+        nl_name[nnl] = ts
+        np = np + 1
+        call advance
+      end
+      else call perr "keyword method parameter expected"
+    end
+  end
+  else do
+    call perr "method pattern expected"
+    call advance
+    return
+  end
+  if tk \= TK_LB then do
+    call perr "[ expected after method pattern " || sel
+    return
+  end
+  call advance
+  body = parse_method_body()
+  if pe = 1 then return
+  tfirst = pm_tfirst
+  ntemps = pm_ntemps
+  prim = pm_prim
+  call compile_method c, sel, pfirst, np, tfirst, ntemps, body, prim, startp
+  return
+
+/* items inside  Foo subclass: Bar [ ... ]  (cnum is the class) */
+parse_class_body: procedure = .void
+  arg cnum = .int
+  nme = .string
+  c2 = .int
+  o = .int
+  e = .int
+  m = .int
+  do forever
+    if tk = TK_RB | tk = TK_EOF | pe = 1 then leave
+    if tk = TK_DOT then do
+      call advance
+      iterate
+    end
+    if (isbin("|") = 1 | isbin("||") = 1) & pattern_follows() = 0 then do
+      do while isbin("|") = 1 | isbin("||") = 1
+        if isbin("||") = 1 then call advance
+        else do
+          call advance
+          do while tk = TK_IDENT
+            call add_ivar cnum, ts
+            call advance
+          end
+          if isbin("|") = 1 then call advance
+          else call perr "| expected"
+        end
+      end
+      iterate
+    end
+    if isbin("<") = 1 & pattern_follows() = 0 then do
+      pm_prim = 0
+      call skip_pragma
+      iterate
+    end
+    if tk = TK_IDENT then do
+      call peek_tok
+      if pk_t = TK_ASSIGN then do
+        nme = ts
+        call advance
+        call advance
+        e = parse_expr()
+        if tk = TK_DOT then call advance
+        if pe = 0 then call define_classvar cnum, nme, e
+        iterate
+      end
+      if pk_t = TK_IDENT & pk_s == "class" then do
+        /* Foo class >> sel [ ]   or   Foo class [ | a | ] */
+        nme = ts
+        m = lex_mark()
+        call advance
+        call advance
+        if isbin(">>") = 1 then do
+          call lex_drop m
+          call advance
+          c2 = find_class(nme)
+          if c2 = 0 then do
+            call perr "unknown class " || nme
+            leave
+          end
+          call parse_method_def c_meta[c2]
+          iterate
+        end
+        if tk = TK_LB then do
+          call lex_drop m
+          call advance
+          c2 = find_class(nme)
+          if c2 = 0 then do
+            call perr "unknown class " || nme
+            leave
+          end
+          call parse_class_body c_meta[c2]
+          iterate
+        end
+        call lex_reset m
+      end
+      if pk_t = TK_BIN & pk_s == ">>" then do
+        nme = ts
+        call advance
+        call advance
+        c2 = find_class(nme)
+        if c2 = 0 then do
+          call perr "unknown class " || nme
+          leave
+        end
+        call parse_method_def c2
+        iterate
+      end
+    end
+    call parse_method_def cnum
+  end
+  if tk = TK_RB then call advance
+  return
+
+/* "Foo class [ | a b | ]" and "Foo class extend [ ... ]" style bodies for the metaclass */
+parse_meta_body: procedure = .void
+  arg cnum = .int
+  call parse_class_body c_meta[cnum]
+  return
+
+/* is the token sequence at the mark "pattern [" ? (used to spot Foo >> sel [ ) */
+pattern_follows: procedure = .int
+  m = .int
+  ok = .int
+  m = lex_mark()
+  ok = 0
+  if tk = TK_IDENT then do
+    call advance
+    if tk = TK_LB then ok = 1
+  end
+  else if tk = TK_BIN then do
+    call advance
+    if tk = TK_IDENT then do
+      call advance
+      if tk = TK_LB then ok = 1
+    end
+  end
+  else if tk = TK_KW then do
+    do while tk = TK_KW
+      call advance
+      if tk = TK_IDENT then call advance
+      else leave
+    end
+    if tk = TK_LB then ok = 1
+  end
+  call lex_reset m
+  return ok
+
+/* process one top-level construct; returns after consuming it */
+top_item: procedure = .void
+  m = .int
+  nme = .string
+  sup = .string
+  cn = .int
+  sc = .int
+  st = .int
+  n = .int
+  e = .int
+  if tk = TK_IDENT & ts == "Eval" then do
+    call peek_tok
+    if pk_t = TK_LB then do
+      call advance
+      call advance
+      do forever
+        do while tk = TK_DOT
+          call advance
+        end
+        if tk = TK_RB | tk = TK_EOF | pe = 1 then leave
+        if isbin("|") = 1 | isbin("||") = 1 then do
+          n = parse_temps()
+          iterate
+        end
+        st = parse_statement()
+        if pe = 0 then call run_doit st
+        if tk = TK_DOT then call advance
+      end
+      if tk = TK_RB then call advance
+      return
+    end
+  end
+  if tk = TK_IDENT then do
+    m = lex_mark()
+    nme = ts
+    call advance
+    if tk = TK_KW & ts == "subclass:" then do
+      call advance
+      if tk = TK_IDENT then do
+        sup = nme
+        nme = ts
+        call advance
+        if tk = TK_LB then do
+          call lex_drop m
+          call advance
+          sc = find_class(sup)
+          if sc = 0 & sup \== "nil" then do
+            call perr "unknown superclass " || sup
+            return
+          end
+          cn = define_class(nme, sc)
+          call parse_class_body cn
+          return
+        end
+      end
+    end
+    else if tk = TK_IDENT & ts == "extend" then do
+      call advance
+      if tk = TK_LB then do
+        call lex_drop m
+        call advance
+        cn = find_class(nme)
+        if cn = 0 then do
+          call perr "unknown class " || nme
+          return
+        end
+        call parse_class_body cn
+        return
+      end
+    end
+    else if tk = TK_IDENT & ts == "class" then do
+      call advance
+      if tk = TK_IDENT & ts == "extend" then do
+        call advance
+        if tk = TK_LB then do
+          call lex_drop m
+          call advance
+          cn = find_class(nme)
+          if cn = 0 then do
+            call perr "unknown class " || nme
+            return
+          end
+          call parse_class_body c_meta[cn]
+          return
+        end
+      end
+      else if isbin(">>") = 1 then do
+        call advance
+        if pattern_follows() = 1 then do
+          call lex_drop m
+          cn = find_class(nme)
+          if cn = 0 then do
+            call perr "unknown class " || nme
+            return
+          end
+          call parse_method_def c_meta[cn]
+          return
+        end
+      end
+      else if tk = TK_LB then do
+        call lex_drop m
+        call advance
+        cn = find_class(nme)
+        if cn = 0 then do
+          call perr "unknown class " || nme
+          return
+        end
+        call parse_class_body c_meta[cn]
+        return
+      end
+    end
+    else if isbin(">>") = 1 then do
+      call advance
+      if pattern_follows() = 1 then do
+        call lex_drop m
+        cn = find_class(nme)
+        if cn = 0 then do
+          call perr "unknown class " || nme
+          return
+        end
+        call parse_method_def cn
+        return
+      end
+    end
+    call lex_reset m
+  end
+  if isbin("|") = 1 | isbin("||") = 1 then do
+    n = parse_temps()
+    return
+  end
+  st = parse_statement()
+  if pe = 0 then call run_doit st
+  return
+
+/* ---------------------------------------------------------------------
+   File-in: parse and execute a whole source text
+   --------------------------------------------------------------------- */
+file_in: procedure = .void
+  arg text = .string, name = .string
+  sv_txt = .string
+  sv_tp = .int
+  sv_len = .int
+  sv_name = .string
+  sv_tk = .int
+  sv_ts = .string
+  sv_ti = .int
+  sv_tf = .float
+  sv_tpos = .int
+  sv_pkh = .int
+  sv_pkt = .int
+  sv_pks = .string
+  sv_pki = .int
+  sv_pkf = .float
+  sv_pkp = .int
+  sv_pe = .int
+  sv_txt = txt
+  sv_tp = tp
+  sv_len = tlen
+  sv_name = src_name
+  sv_tk = tk
+  sv_ts = ts
+  sv_ti = ti
+  sv_tf = tf
+  sv_tpos = tpos
+  sv_pkh = pk_have
+  sv_pkt = pk_t
+  sv_pks = pk_s
+  sv_pki = pk_i
+  sv_pkf = pk_f
+  sv_pkp = pk_p
+  sv_pe = pe
+  txt = text
+  tp = 1
+  tlen = length(text)
+  src_name = name
+  pk_have = 0
+  pe = 0
+  call advance
+  do while tk \= TK_EOF & halted = 0
+    pe = 0
+    if tk = TK_DOT | tk = TK_BANG then do
+      call advance
+      iterate
+    end
+    call top_item
+    if pe = 1 then do
+      /* resynchronise at the next statement end */
+      do while tk \= TK_EOF & tk \= TK_DOT & tk \= TK_BANG
+        call advance
+      end
+    end
+    else if tk = TK_DOT | tk = TK_BANG then call advance
+  end
+  txt = sv_txt
+  tp = sv_tp
+  tlen = sv_len
+  src_name = sv_name
+  tk = sv_tk
+  ts = sv_ts
+  ti = sv_ti
+  tf = sv_tf
+  tpos = sv_tpos
+  pk_have = sv_pkh
+  pk_t = sv_pkt
+  pk_s = sv_pks
+  pk_i = sv_pki
+  pk_f = sv_pkf
+  pk_p = sv_pkp
+  pe = sv_pe
+  return
+
+read_file: procedure = .string
+  arg fn = .string
+  fid = .int
+  eof = .int
+  rcx = .int
+  line = .string
+  acc = .string
+  chunk = .string
+  nl = .int
+  rmode = "r"
+  fid = 0
+  assembler fopen fid, fn, rmode
+  if fid = 0 then return ""
+  acc = ""
+  chunk = ""
+  nl = 0
+  eof = 0
+  do while eof = 0
+    line = ""
+    assembler freadline line, fid
+    assembler feof eof, fid
+    if eof > 0 & length(line) = 0 then leave
+    chunk = chunk || line || '0a'x
+    nl = nl + 1
+    if nl >= 100 then do
+      acc = acc || chunk
+      chunk = ""
+      nl = 0
+    end
+  end
+  assembler fclose rcx, fid
+  return acc || chunk

@@ -1,0 +1,1459 @@
+
+/* ---------------------------------------------------------------------
+   Number helpers
+   --------------------------------------------------------------------- */
+numkind: procedure = .int
+  arg x = .int
+  k = .int
+  if x // 2 \= 0 then return 1
+  k = o_kind[x % 2]
+  if k = KD_BIG then return 2
+  if k = KD_FLT then return 3
+  return 0
+
+tofloat: procedure = .float
+  arg x = .int
+  if x // 2 \= 0 then return intval(x) as .float
+  if o_kind[x % 2] = KD_BIG then return o_s[x % 2] as .float
+  return o_f[x % 2]
+
+float_int: procedure = .int
+  arg f = .float
+  if f \= f then return 0
+  if f > -900000000000000000.0 & f < 900000000000000000.0 then return mkint(rxfloat..trunc(f) as .int)
+  return big_norm(float_to_istr(f))
+
+float_str: procedure = .string
+  arg f = .float
+  s = .string
+  p = .int
+  if f \= f then return "nan"
+  s = f as .string
+  p = pos("e", s)
+  if p = 0 then do
+    if pos(".", s) = 0 then s = s || ".0"
+    return s
+  end
+  if pos(".", left(s, p - 1)) = 0 then s = left(s, p - 1) || ".0" || substr(s, p)
+  s = translate(s, "", "+")
+  return s
+
+/* arithmetic on numbers; op: 1 add 2 sub 3 mul 4 div 5 idiv 6 mod 7 quo 8 rem */
+p_arith: procedure = .int
+  arg op = .int, x = .int, y = .int
+  kx = .int
+  ky = .int
+  fx = .float
+  fy = .float
+  q = .float
+  a = .int
+  b = .int
+  r = .int
+  sx = .string
+  sy = .string
+  kx = numkind(x)
+  ky = numkind(y)
+  if kx = 0 | ky = 0 then return 0
+  if kx = 3 | ky = 3 then do
+    fx = tofloat(x)
+    fy = tofloat(y)
+    select
+      when op = 1 then return mkfloat(fx + fy)
+      when op = 2 then return mkfloat(fx - fy)
+      when op = 3 then return mkfloat(fx * fy)
+      when op = 4 then do
+        if fy = 0.0 then return 0
+        return mkfloat(fx / fy)
+      end
+      otherwise do
+        if fy = 0.0 then return 0
+        if op = 5 then return float_int(rxfloat..floor(fx / fy))
+        if op = 6 then return mkfloat(fx - fy * rxfloat..floor(fx / fy))
+        if op = 7 then return float_int(rxfloat..trunc(fx / fy))
+        return mkfloat(fx - fy * rxfloat..trunc(fx / fy))
+      end
+    end
+  end
+  if kx = 1 & ky = 1 then do
+    a = intval(x)
+    b = intval(y)
+    select
+      when op = 1 then return big_norm0(a + b)
+      when op = 2 then return big_norm0(a - b)
+      when op = 3 then do
+        fx = a as .float
+        fy = b as .float
+        if rxfloat..fabs(fx * fy) < 900000000000000000.0 then return mkint(a * b)
+        return big_norm(smul(a as .string, b as .string))
+      end
+      otherwise do
+        if b = 0 then return 0
+        if op = 4 then do
+          if a // b = 0 then return mkint(a % b)
+          return 0
+        end
+        r = a % b
+        if op = 5 then do
+          if a // b \= 0 & ((a < 0) \= (b < 0)) then r = r - 1
+          return mkint(r)
+        end
+        if op = 6 then do
+          r = a // b
+          if r \= 0 & ((r < 0) \= (b < 0)) then r = r + b
+          return mkint(r)
+        end
+        if op = 7 then return mkint(r)
+        return mkint(a // b)
+      end
+    end
+  end
+  sx = num_str(x)
+  sy = num_str(y)
+  select
+    when op = 1 then return big_norm(sadd(sx, sy))
+    when op = 2 then return big_norm(ssub(sx, sy))
+    when op = 3 then return big_norm(smul(sx, sy))
+    otherwise do
+      if sy == "0" then return 0
+      call sdivmod sx, sy
+      if op = 4 then do
+        if sr == "0" then return big_norm(sq)
+        return 0
+      end
+      if op = 7 then return big_norm(sq)
+      if op = 8 then return big_norm(sr)
+      /* floor division and modulo */
+      if sr \== "0" & ((left(sx, 1) == "-") \= (left(sy, 1) == "-")) then do
+        if op = 5 then return big_norm(ssub(sq, "1"))
+        return big_norm(sadd(sr, sy))
+      end
+      if op = 5 then return big_norm(sq)
+      return big_norm(sr)
+    end
+  end
+  return 0
+
+big_norm0: procedure = .int
+  arg v = .int
+  if v > -1000000000000000000 & v < 1000000000000000000 then return mkint(v)
+  return big_norm(v as .string)
+
+/* comparison: returns -1/0/1, or 2 when not comparable */
+p_cmp: procedure = .int
+  arg x = .int, y = .int
+  kx = .int
+  ky = .int
+  fx = .float
+  fy = .float
+  kx = numkind(x)
+  ky = numkind(y)
+  if kx = 0 | ky = 0 then return 2
+  if kx = 3 | ky = 3 then do
+    fx = tofloat(x)
+    fy = tofloat(y)
+    if fx < fy then return -1
+    if fx > fy then return 1
+    if fx = fy then return 0
+    return 2
+  end
+  if kx = 1 & ky = 1 then do
+    if intval(x) < intval(y) then return -1
+    if intval(x) > intval(y) then return 1
+    return 0
+  end
+  return scmp(num_str(x), num_str(y))
+
+/* ---------------------------------------------------------------------
+   Dictionaries
+   --------------------------------------------------------------------- */
+dkey: procedure = .string
+  arg x = .int
+  k = .int
+  if x // 2 \= 0 then return "i" || intval(x)
+  k = o_kind[x % 2]
+  select
+    when k = KD_STR then return "s" || o_s[x % 2]
+    when k = KD_SYM then return "y" || o_s[x % 2]
+    when k = KD_BIG then return "i" || o_s[x % 2]
+    when k = KD_FLT then do
+      if o_f[x % 2] = rxfloat..trunc(o_f[x % 2]) & rxfloat..fabs(o_f[x % 2]) < 900000000000000000.0 then return "i" || (rxfloat..trunc(o_f[x % 2]) as .int)
+      return "f" || o_f[x % 2]
+    end
+    when k = KD_CHR then return "c" || o_x[x % 2]
+    otherwise nop
+  end
+  return "o" || x
+
+dict_new: procedure = .int
+  arg c = .int
+  o = .int
+  d = .int
+  nd0 = nd0 + 1
+  d = nd0
+  dd_head[d] = 0
+  dd_tail[d] = 0
+  dd_n[d] = 0
+  o = newobj(c, KD_DICT, c_ninst[c])
+  o_x[o % 2] = d
+  return o
+
+dict_find: procedure = .int
+  arg o = .int, key = .int
+  v = .string
+  v = dmap[o_x[o % 2] || "|" || dkey(key)]
+  if v == "" then return 0
+  return v as .int
+
+dict_put: procedure = .void
+  arg o = .int, key = .int, val = .int
+  e = .int
+  d = .int
+  e = dict_find(o, key)
+  if e > 0 then do
+    de_val[e] = val
+    return
+  end
+  d = o_x[o % 2]
+  ne = ne + 1
+  de_key[ne] = key
+  de_val[ne] = val
+  de_next[ne] = 0
+  de_live[ne] = 1
+  if dd_tail[d] = 0 then dd_head[d] = ne
+  else de_next[dd_tail[d]] = ne
+  dd_tail[d] = ne
+  dd_n[d] = dd_n[d] + 1
+  dmap[d || "|" || dkey(key)] = ne
+  return
+
+dict_remove: procedure = .int
+  arg o = .int, key = .int
+  e = .int
+  d = .int
+  e = dict_find(o, key)
+  if e = 0 then return 0
+  d = o_x[o % 2]
+  de_live[e] = 0
+  dd_n[d] = dd_n[d] - 1
+  dmap[d || "|" || dkey(key)] = ""
+  return e
+
+/* ---------------------------------------------------------------------
+   Exceptions
+   --------------------------------------------------------------------- */
+/* does handler class spec h (class or ExceptionSet array) match exception ex ? */
+exc_matches: procedure = .int
+  arg h = .int, ex = .int
+  c = .int
+  i = .int
+  n = .int
+  if h // 2 \= 0 then return 0
+  if o_kind[h % 2] = KD_CLS then return inherits(cof(ex), o_x[h % 2])
+  if o_kind[h % 2] = KD_ARR then do
+    n = o_n[h % 2]
+    do i = 0 to n - 1
+      if exc_matches(sl[o_slot[h % 2] + i], ex) = 1 then return 1
+    end
+  end
+  return 0
+
+/* signal ex, looking for handlers from index start downwards */
+do_signal: procedure = .int
+  arg ex = .int, start = .int, fresh = .int
+  k = .int
+  sig = .int
+  oldtop = .int
+  v = .int
+  hb = .int
+  base = .int
+  m = .int
+  if fresh = 1 then do
+    sigcount = sigcount + 1
+    sig = sigcount
+    call slot_put ex, 2, mkint(sig)
+  end
+  else sig = intval(slot_get(ex, 2))
+  k = 0
+  do v = start to 1 by -1
+    if exc_matches(h_cls[v], ex) = 1 then do
+      k = v
+      leave
+    end
+  end
+  if k = 0 then do
+    /* unhandled */
+    base = asp
+    v = send_sel(ex, S_DEFAULTACTION, base, 0)
+    asp = base
+    if unw > 0 then return 0
+    return v
+  end
+  oldtop = htop
+  htop = k - 1
+  call slot_put ex, 1, mkint(k)
+  hb = h_blk[k]
+  base = asp
+  if n_b[o_x[hb % 2]] = 0 then v = call_block(hb, base, 0)
+  else do
+    asp = asp + 1
+    ast[asp] = ex
+    v = call_block(hb, base, 1)
+    asp = base
+  end
+  htop = oldtop
+  if unw = UW_NONE then do
+    /* the handler block completed: return its value from on:do: */
+    unw = UW_EXC
+    unw_t = h_id[k]
+    unw_v = v
+    return 0
+  end
+  if unw = UW_RESUME & unw_t = sig then do
+    unw = UW_NONE
+    return unw_v
+  end
+  return 0
+
+/* ---------------------------------------------------------------------
+   Primitive dispatch
+   --------------------------------------------------------------------- */
+prim: procedure = .int
+  arg p = .int, rcv = .int, base = .int, na = .int
+  if p < PR_STRSIZE then return prim_a(p, rcv, base, na)
+  if p < PR_BLOCKVALUE then return prim_b(p, rcv, base, na)
+  return prim_c(p, rcv, base, na)
+
+/* numbers, objects, reflection */
+prim_a: procedure = .int
+  arg p = .int, rcv = .int, base = .int, na = .int
+  a1 = .int
+  a2 = .int
+  r = .int
+  c = .int
+  i = .int
+  k = .int
+  s = .string
+  x = .float
+  o = .int
+  a1 = ast[base + 1]
+  a2 = ast[base + 2]
+  select
+    when p = PR_ADD then return p_arith(1, rcv, a1)
+    when p = PR_SUB then return p_arith(2, rcv, a1)
+    when p = PR_MUL then return p_arith(3, rcv, a1)
+    when p = PR_DIV then return p_arith(4, rcv, a1)
+    when p = PR_IDIV then return p_arith(5, rcv, a1)
+    when p = PR_MOD then return p_arith(6, rcv, a1)
+    when p = PR_QUO then return p_arith(7, rcv, a1)
+    when p = PR_REM then return p_arith(8, rcv, a1)
+    when p = PR_LT | p = PR_GT | p = PR_LE | p = PR_GE then do
+      r = p_cmp(rcv, a1)
+      if r = 2 then return 0
+      if p = PR_LT then return mkbool(r < 0)
+      if p = PR_GT then return mkbool(r > 0)
+      if p = PR_LE then return mkbool(r <= 0)
+      return mkbool(r >= 0)
+    end
+    when p = PR_EQ | p = PR_NE then do
+      r = p_cmp(rcv, a1)
+      if p = PR_EQ then return mkbool(r = 0)
+      return mkbool(r \= 0)
+    end
+    when p = PR_IDENT then return mkbool(rcv = a1)
+    when p = PR_NIDENT then return mkbool(rcv \= a1)
+    when p = PR_CLASS then return c_oop[cof(rcv)]
+    when p = PR_BASICSIZE then do
+      if rcv // 2 \= 0 then return mkint(0)
+      k = o_kind[rcv % 2]
+      if k = KD_STR | k = KD_SYM then return mkint(length(o_s[rcv % 2]))
+      if k = KD_ARR | k = KD_PLAIN then return mkint(o_n[rcv % 2] - c_ninst[o_cls[rcv % 2]])
+      return mkint(0)
+    end
+    when p = PR_BASICAT then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      k = o_kind[rcv % 2]
+      if k = KD_STR | k = KD_SYM then do
+        if i < 1 | i > length(o_s[rcv % 2]) then return 0
+        return mkchar(c2d(substr(o_s[rcv % 2], i, 1)))
+      end
+      c = c_ninst[o_cls[rcv % 2]]
+      if i < 1 | i > o_n[rcv % 2] - c then return 0
+      return sl[o_slot[rcv % 2] + c + i - 1]
+    end
+    when p = PR_BASICATPUT then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      k = o_kind[rcv % 2]
+      if k = KD_STR then do
+        if i < 1 | i > length(o_s[rcv % 2]) | a2 // 2 \= 0 then return 0
+        if o_kind[a2 % 2] \= KD_CHR then return 0
+        o_s[rcv % 2] = left(o_s[rcv % 2], i - 1) || d2c(o_x[a2 % 2]) || substr(o_s[rcv % 2], i + 1)
+        return a2
+      end
+      if k = KD_SYM then return 0
+      c = c_ninst[o_cls[rcv % 2]]
+      if i < 1 | i > o_n[rcv % 2] - c then return 0
+      sl[o_slot[rcv % 2] + c + i - 1] = a2
+      return a2
+    end
+    when p = PR_INSTVARAT then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i < 1 | i > o_n[rcv % 2] then return 0
+      return sl[o_slot[rcv % 2] + i - 1]
+    end
+    when p = PR_INSTVARATPUT then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i < 1 | i > o_n[rcv % 2] then return 0
+      sl[o_slot[rcv % 2] + i - 1] = a2
+      return a2
+    end
+    when p = PR_IDHASH then do
+      if rcv // 2 \= 0 then return rcv
+      return mkint(rcv % 2)
+    end
+    when p = PR_PERFORM | p = PR_PERFORMARGS then do
+      s = strof(a1)
+      if s == "" | isstr(a1) = 0 then return 0
+      k = selid(s)
+      if p = PR_PERFORM then do
+        /* shift the arguments down one place */
+        do i = 2 to na
+          ast[base + i - 1] = ast[base + i]
+        end
+        asp = base + na - 1
+        r = send_sel(rcv, k, base, na - 1)
+        asp = base
+        return r
+      end
+      if a2 // 2 \= 0 then return 0
+      c = o_n[a2 % 2]
+      asp = base
+      do i = 0 to c - 1
+        asp = asp + 1
+        ast[asp] = sl[o_slot[a2 % 2] + i]
+      end
+      r = send_sel(rcv, k, base, c)
+      asp = base
+      return r
+    end
+    when p = PR_ISKINDOF then do
+      if a1 // 2 \= 0 then return 0
+      if o_kind[a1 % 2] \= KD_CLS & o_kind[a1 % 2] \= KD_META then return 0
+      return mkbool(inherits(cof(rcv), o_x[a1 % 2]))
+    end
+    when p = PR_ISMEMBEROF then do
+      if a1 // 2 \= 0 then return 0
+      return mkbool(cof(rcv) = o_x[a1 % 2])
+    end
+    when p = PR_RESPONDSTO then do
+      s = strof(a1)
+      if isstr(a1) = 0 then return 0
+      return mkbool(lookup(cof(rcv), selid(s)) > 0)
+    end
+    when p = PR_SHALLOWCOPY then return shallow_copy(rcv)
+    when p = PR_BASICNEW then do
+      if rcv // 2 \= 0 then return 0
+      return new_instance(o_x[rcv % 2], 0)
+    end
+    when p = PR_BASICNEWSIZE then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      if intval(a1) < 0 then return 0
+      return new_instance(o_x[rcv % 2], intval(a1))
+    end
+    when p = PR_FLOATOP then do
+      if a1 // 2 = 0 then return 0
+      k = intval(a1)
+      if numkind(rcv) = 0 then return 0
+      x = tofloat(rcv)
+      select
+        when k = 1 then do
+          if x < 0.0 then return 0
+          return mkfloat(rxfloat..sqrt(x))
+        end
+        when k = 2 then return mkfloat(rxfloat..sin(x))
+        when k = 3 then return mkfloat(rxfloat..cos(x))
+        when k = 4 then return mkfloat(rxfloat..tan(x))
+        when k = 5 then return mkfloat(rxfloat..atan(x))
+        when k = 6 then do
+          if x <= 0.0 then return 0
+          return mkfloat(rxfloat..log(x))
+        end
+        when k = 7 then return mkfloat(rxfloat..exp(x))
+        when k = 8 then do
+          if x <= 0.0 then return 0
+          return mkfloat(rxfloat..log10(x))
+        end
+        when k = 9 then return mkfloat(rxfloat..asin(x))
+        when k = 10 then return mkfloat(rxfloat..acos(x))
+        when k = 11 then do
+          if numkind(a2) = 0 then return 0
+          return mkfloat(rxfloat..pow(x, tofloat(a2)))
+        end
+        otherwise return 0
+      end
+    end
+    when p = PR_TRUNCATED | p = PR_FLOOR | p = PR_CEILING | p = PR_ROUNDED then do
+      k = numkind(rcv)
+      if k = 1 | k = 2 then return rcv
+      if k \= 3 then return 0
+      x = o_f[rcv % 2]
+      if p = PR_TRUNCATED then return float_int(rxfloat..trunc(x))
+      if p = PR_FLOOR then return float_int(rxfloat..floor(x))
+      if p = PR_CEILING then return float_int(rxfloat..ceil(x))
+      if x >= 0.0 then return float_int(rxfloat..floor(x + 0.5))
+      return float_int(rxfloat..ceil(x - 0.5))
+    end
+    when p = PR_ASFLOAT then do
+      if numkind(rcv) = 0 then return 0
+      return mkfloat(tofloat(rcv))
+    end
+    when p = PR_BITAND | p = PR_BITOR | p = PR_BITXOR then do
+      if rcv // 2 = 0 | a1 // 2 = 0 then return 0
+      return bitop(p, intval(rcv), intval(a1))
+    end
+    when p = PR_BITSHIFT then do
+      if rcv // 2 = 0 | a1 // 2 = 0 then return 0
+      k = intval(a1)
+      if k >= 0 then do
+        o = rcv
+        do i = 1 to k
+          o = p_arith(3, o, mkint(2))
+          if o = 0 then return 0
+        end
+        return o
+      end
+      o = rcv
+      do i = 1 to 0 - k
+        o = p_arith(5, o, mkint(2))
+      end
+      return o
+    end
+    when p = PR_PRINTSTRING then do
+      k = numkind(rcv)
+      if k = 1 then return mkstr(intval(rcv) as .string)
+      if k = 2 then return mkstr(o_s[rcv % 2])
+      if k = 3 then return mkstr(float_str(o_f[rcv % 2]))
+      return 0
+    end
+    when p = PR_PRINTRADIX then do
+      if numkind(rcv) \= 1 | a1 // 2 = 0 then return 0
+      return mkstr(radix_str(intval(rcv), intval(a1)))
+    end
+    when p = PR_ISINT then do
+      k = numkind(rcv)
+      return mkbool(k = 1 | k = 2)
+    end
+    when p = PR_ISFLOAT then return mkbool(numkind(rcv) = 3)
+    when p = PR_ISSTRING then return mkbool(kindof(rcv) = KD_STR | kindof(rcv) = KD_SYM)
+    when p = PR_ISSYMBOL then return mkbool(kindof(rcv) = KD_SYM)
+    when p = PR_ISCHAR then return mkbool(kindof(rcv) = KD_CHR)
+    when p = PR_ISNUMBER then return mkbool(numkind(rcv) > 0)
+    when p = PR_INTSQRT then do
+      if numkind(rcv) \= 1 then return 0
+      if intval(rcv) < 0 then return 0
+      return mkint(rxfloat..floor(rxfloat..sqrt(intval(rcv) as .float)) as .int)
+    end
+    otherwise return 0
+  end
+  return 0
+
+bitop: procedure = .int
+  arg p = .int, x = .int, y = .int
+  r = .int
+  m = .int
+  bx = .int
+  byy = .int
+  rb = .int
+  if x < 0 | y < 0 then return 0
+  r = 0
+  m = 1
+  do while x > 0 | y > 0
+    bx = x // 2
+    byy = y // 2
+    rb = (bx + byy) // 2
+    if p = PR_BITAND then rb = bx * byy
+    if p = PR_BITOR then do
+      rb = bx + byy
+      if rb > 1 then rb = 1
+    end
+    r = r + rb * m
+    m = m * 2
+    x = x % 2
+    y = y % 2
+  end
+  return mkint(r)
+
+radix_str: procedure = .string
+  arg n = .int, rdx = .int
+  digs = .string
+  s = .string
+  neg = .int
+  d = .int
+  digs = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  if rdx < 2 | rdx > 36 then rdx = 10
+  neg = 0
+  if n < 0 then do
+    neg = 1
+    n = 0 - n
+  end
+  if n = 0 then return "0"
+  s = ""
+  do while n > 0
+    d = n // rdx
+    s = substr(digs, d + 1, 1) || s
+    n = n % rdx
+  end
+  if neg = 1 then s = "-" || s
+  return s
+
+shallow_copy: procedure = .int
+  arg x = .int
+  k = .int
+  o = .int
+  i = .int
+  e = .int
+  c = .int
+  if x // 2 \= 0 then return x
+  k = o_kind[x % 2]
+  select
+    when k = KD_STR then do
+      o = newobj(o_cls[x % 2], KD_STR, 0)
+      o_s[o % 2] = o_s[x % 2]
+      return o
+    end
+    when k = KD_SYM | k = KD_CHR | k = KD_CLS | k = KD_META | k = KD_BLK then return x
+    when k = KD_FLT then return mkfloat(o_f[x % 2])
+    when k = KD_BIG then return x
+    when k = KD_DICT then do
+      o = dict_new(o_cls[x % 2])
+      e = dd_head[o_x[x % 2]]
+      do while e > 0
+        if de_live[e] = 1 then call dict_put o, de_key[e], de_val[e]
+        e = de_next[e]
+      end
+      do i = 0 to o_n[x % 2] - 1
+        sl[o_slot[o % 2] + i] = sl[o_slot[x % 2] + i]
+      end
+      return o
+    end
+    otherwise nop
+  end
+  o = newobj(o_cls[x % 2], k, o_n[x % 2])
+  do i = 0 to o_n[x % 2] - 1
+    sl[o_slot[o % 2] + i] = sl[o_slot[x % 2] + i]
+  end
+  o_x[o % 2] = o_x[x % 2]
+  return o
+
+/* new instance of class c, with n indexed slots */
+new_instance: procedure = .int
+  arg c = .int, n = .int
+  k = .int
+  o = .int
+  k = c_kind[c]
+  select
+    when k = KD_PLAIN then do
+      if n > 0 then return newobj(c, KD_ARR, c_ninst[c] + n)
+      return newobj(c, KD_PLAIN, c_ninst[c])
+    end
+    when k = KD_ARR then return newobj(c, KD_ARR, c_ninst[c] + n)
+    when k = KD_STR then do
+      o = newobj(c, KD_STR, 0)
+      o_s[o % 2] = copies(" ", n)
+      return o
+    end
+    when k = KD_DICT then return dict_new(c)
+    when k = KD_FLT then return mkfloat(0.0)
+    otherwise return 0
+  end
+  return 0
+
+/* strings, symbols, characters, arrays, dictionaries */
+prim_b: procedure = .int
+  arg p = .int, rcv = .int, base = .int, na = .int
+  acc = .string
+  a1 = .int
+  a2 = .int
+  a3 = .int
+  s = .string
+  t = .string
+  i = .int
+  j = .int
+  k = .int
+  r = .int
+  n = .int
+  o = .int
+  e = .int
+  c = .int
+  a1 = ast[base + 1]
+  a2 = ast[base + 2]
+  a3 = ast[base + 3]
+  select
+    when p = PR_STRSIZE then do
+      if isstr(rcv) = 0 then return 0
+      return mkint(length(o_s[rcv % 2]))
+    end
+    when p = PR_STRAT then do
+      if isstr(rcv) = 0 | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i < 1 | i > length(o_s[rcv % 2]) then return 0
+      return mkchar(c2d(substr(o_s[rcv % 2], i, 1)))
+    end
+    when p = PR_STRATPUT then do
+      if kindof(rcv) \= KD_STR | a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i < 1 | i > length(o_s[rcv % 2]) | kindof(a2) \= KD_CHR then return 0
+      o_s[rcv % 2] = left(o_s[rcv % 2], i - 1) || d2c(o_x[a2 % 2]) || substr(o_s[rcv % 2], i + 1)
+      return a2
+    end
+    when p = PR_STRCAT then do
+      if isstr(rcv) = 0 | isstr(a1) = 0 then return 0
+      return mkstr(o_s[rcv % 2] || o_s[a1 % 2])
+    end
+    when p = PR_STRCOPY then do
+      if isstr(rcv) = 0 | a1 // 2 = 0 | a2 // 2 = 0 then return 0
+      i = intval(a1)
+      j = intval(a2)
+      if j < i then do
+        if i >= 1 & i <= length(o_s[rcv % 2]) + 1 & j = i - 1 then return mkstr("")
+        return 0
+      end
+      if i < 1 | j > length(o_s[rcv % 2]) then return 0
+      return mkstr(substr(o_s[rcv % 2], i, j - i + 1))
+    end
+    when p = PR_STREQ then do
+      if isstr(rcv) = 0 | isstr(a1) = 0 then return false_oop
+      if o_kind[rcv % 2] \= o_kind[a1 % 2] then return false_oop
+      return mkbool(o_s[rcv % 2] == o_s[a1 % 2])
+    end
+    when p = PR_STRLT | p = PR_STRCOMPARE then do
+      if isstr(rcv) = 0 | isstr(a1) = 0 then return 0
+      s = o_s[rcv % 2]
+      t = o_s[a1 % 2]
+      if p = PR_STRCOMPARE then do
+        if s == t then return mkint(0)
+        if s << t then return mkint(-1)
+        return mkint(1)
+      end
+      return mkbool(s << t)
+    end
+    when p = PR_STRHASH then do
+      if isstr(rcv) = 0 then return 0
+      s = o_s[rcv % 2]
+      n = length(s)
+      r = n
+      do i = 1 to min(n, 24)
+        r = (r * 31 + c2d(substr(s, i, 1))) // 1000000007
+      end
+      return mkint(r)
+    end
+    when p = PR_ASSYMBOL then do
+      if isstr(rcv) = 0 then return 0
+      return mksym(o_s[rcv % 2])
+    end
+    when p = PR_ASSTRING then do
+      if isstr(rcv) = 0 then return 0
+      if o_kind[rcv % 2] = KD_STR then return rcv
+      return mkstr(o_s[rcv % 2])
+    end
+    when p = PR_UPPER then do
+      if isstr(rcv) = 0 then return 0
+      if kindof(rcv) = KD_SYM then return mksym(upper(o_s[rcv % 2]))
+      return mkstr(upper(o_s[rcv % 2]))
+    end
+    when p = PR_LOWER then do
+      if isstr(rcv) = 0 then return 0
+      if kindof(rcv) = KD_SYM then return mksym(lower(o_s[rcv % 2]))
+      return mkstr(lower(o_s[rcv % 2]))
+    end
+    when p = PR_INDEXOF then do
+      if isstr(rcv) = 0 then return 0
+      if kindof(a1) = KD_CHR then return mkint(pos(d2c(o_x[a1 % 2]), o_s[rcv % 2]))
+      if isstr(a1) = 1 then do
+        if na >= 2 & a2 // 2 \= 0 then i = intval(a2)
+        else i = 1
+        if i < 1 then i = 1
+        if o_s[a1 % 2] == "" then return mkint(0)
+        return mkint(pos(o_s[a1 % 2], o_s[rcv % 2], i))
+      end
+      return 0
+    end
+    when p = PR_REPLACEALL then do
+      if isstr(rcv) = 0 | isstr(a1) = 0 | isstr(a2) = 0 then return 0
+      s = o_s[rcv % 2]
+      t = o_s[a1 % 2]
+      if t == "" then return mkstr(s)
+      acc = ""
+      i = 1
+      do forever
+        j = pos(t, s, i)
+        if j = 0 then leave
+        acc = acc || substr(s, i, j - i) || o_s[a2 % 2]
+        i = j + length(t)
+      end
+      return mkstr(acc || substr(s, i))
+    end
+    when p = PR_ASNUMBER then do
+      if isstr(rcv) = 0 then return 0
+      return parse_number(o_s[rcv % 2])
+    end
+    when p = PR_STRTRIM then do
+      if isstr(rcv) = 0 then return 0
+      s = o_s[rcv % 2]
+      i = verify(s, " " || '09'x || '0a'x || '0d'x, "N")
+      if i = 0 then return mkstr("")
+      j = length(s)
+      do while j > i & pos(substr(s, j, 1), " " || '09'x || '0a'x || '0d'x) > 0
+        j = j - 1
+      end
+      return mkstr(substr(s, i, j - i + 1))
+    end
+    when p = PR_STRSPLIT then do
+      if isstr(rcv) = 0 then return 0
+      if na >= 1 & isstr(a1) = 1 then t = o_s[a1 % 2]
+      else if na >= 1 & kindof(a1) = KD_CHR then t = d2c(o_x[a1 % 2])
+      else t = " " || '09'x || '0a'x || '0d'x
+      return split_str(o_s[rcv % 2], t)
+    end
+    when p = PR_STRREV then do
+      if isstr(rcv) = 0 then return 0
+      return mkstr(reverse(o_s[rcv % 2]))
+    end
+    when p = PR_STRNEW then do
+      if a1 // 2 = 0 then return 0
+      return mkstr(copies(" ", max(0, intval(a1))))
+    end
+    when p = PR_CHARVALUE then do
+      if kindof(rcv) \= KD_CHR then return 0
+      return mkint(o_x[rcv % 2])
+    end
+    when p = PR_CHARFROM then do
+      if a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i < 0 | i > 255 then return 0
+      return mkchar(i)
+    end
+    when p = PR_ARRNEW then do
+      if a1 // 2 = 0 then return 0
+      return mkarray(max(0, intval(a1)))
+    end
+    when p = PR_ARRAT then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      if o_kind[rcv % 2] \= KD_ARR then return 0
+      i = intval(a1)
+      c = c_ninst[o_cls[rcv % 2]]
+      if i < 1 | i > o_n[rcv % 2] - c then return 0
+      return sl[o_slot[rcv % 2] + c + i - 1]
+    end
+    when p = PR_ARRATPUT then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 then return 0
+      if o_kind[rcv % 2] \= KD_ARR then return 0
+      i = intval(a1)
+      c = c_ninst[o_cls[rcv % 2]]
+      if i < 1 | i > o_n[rcv % 2] - c then return 0
+      sl[o_slot[rcv % 2] + c + i - 1] = a2
+      return a2
+    end
+    when p = PR_ARRSIZE then do
+      if rcv // 2 \= 0 then return 0
+      if o_kind[rcv % 2] \= KD_ARR then return 0
+      return mkint(o_n[rcv % 2] - c_ninst[o_cls[rcv % 2]])
+    end
+    when p = PR_ARRCOPY then do
+      if rcv // 2 \= 0 | a1 // 2 = 0 | a2 // 2 = 0 then return 0
+      if o_kind[rcv % 2] \= KD_ARR then return 0
+      i = intval(a1)
+      j = intval(a2)
+      c = c_ninst[o_cls[rcv % 2]]
+      if j < i then do
+        if j = i - 1 & i >= 1 then return mkarray(0)
+        return 0
+      end
+      if i < 1 | j > o_n[rcv % 2] - c then return 0
+      r = mkarray(j - i + 1)
+      do k = 0 to j - i
+        sl[o_slot[r % 2] + k] = sl[o_slot[rcv % 2] + c + i - 1 + k]
+      end
+      return r
+    end
+    when p = PR_ARRFILL then do
+      if rcv // 2 \= 0 then return 0
+      if o_kind[rcv % 2] \= KD_ARR then return 0
+      c = c_ninst[o_cls[rcv % 2]]
+      do k = c to o_n[rcv % 2] - 1
+        sl[o_slot[rcv % 2] + k] = a1
+      end
+      return rcv
+    end
+    when p = PR_ARRREPLACE then do
+      /* replaceFrom: start to: stop with: coll startingAt: repStart */
+      if rcv // 2 \= 0 | a1 // 2 = 0 | a2 // 2 = 0 | a3 // 2 \= 0 then return 0
+      i = intval(a1)
+      j = intval(a2)
+      e = ast[base + 4]
+      if e // 2 = 0 then return 0
+      k = intval(e)
+      n = j - i + 1
+      if n <= 0 then return rcv
+      if o_kind[rcv % 2] = KD_STR & isstr(a3) = 1 then do
+        if i < 1 | j > length(o_s[rcv % 2]) | k < 1 | k + n - 1 > length(o_s[a3 % 2]) then return 0
+        o_s[rcv % 2] = left(o_s[rcv % 2], i - 1) || substr(o_s[a3 % 2], k, n) || substr(o_s[rcv % 2], j + 1)
+        return rcv
+      end
+      if o_kind[rcv % 2] = KD_ARR & kindof(a3) = KD_ARR then do
+        c = c_ninst[o_cls[rcv % 2]]
+        if i < 1 | j > o_n[rcv % 2] - c | k < 1 | k + n - 1 > o_n[a3 % 2] - c_ninst[o_cls[a3 % 2]] then return 0
+        if rcv = a3 & k < i then do
+          do e = n - 1 to 0 by -1
+            sl[o_slot[rcv % 2] + c + i - 1 + e] = sl[o_slot[a3 % 2] + c + k - 1 + e]
+          end
+        end
+        else do
+          do e = 0 to n - 1
+            sl[o_slot[rcv % 2] + c + i - 1 + e] = sl[o_slot[a3 % 2] + c_ninst[o_cls[a3 % 2]] + k - 1 + e]
+          end
+        end
+        return rcv
+      end
+      return 0
+    end
+    when p = PR_DICTNEW then do
+      if rcv // 2 \= 0 then return 0
+      return dict_new(o_x[rcv % 2])
+    end
+    when p = PR_DICTAT then do
+      if kindof(rcv) \= KD_DICT then return 0
+      e = dict_find(rcv, a1)
+      if e = 0 then return 0
+      return de_val[e]
+    end
+    when p = PR_DICTATPUT then do
+      if kindof(rcv) \= KD_DICT then return 0
+      call dict_put rcv, a1, a2
+      return a2
+    end
+    when p = PR_DICTHAS then do
+      if kindof(rcv) \= KD_DICT then return 0
+      return mkbool(dict_find(rcv, a1) > 0)
+    end
+    when p = PR_DICTREMOVE then do
+      if kindof(rcv) \= KD_DICT then return 0
+      e = dict_remove(rcv, a1)
+      if e = 0 then return 0
+      return de_val[e]
+    end
+    when p = PR_DICTKEYS | p = PR_DICTVALUES then do
+      if kindof(rcv) \= KD_DICT then return 0
+      n = dd_n[o_x[rcv % 2]]
+      r = mkarray(n)
+      e = dd_head[o_x[rcv % 2]]
+      k = 0
+      do while e > 0
+        if de_live[e] = 1 then do
+          if p = PR_DICTKEYS then sl[o_slot[r % 2] + k] = de_key[e]
+          else sl[o_slot[r % 2] + k] = de_val[e]
+          k = k + 1
+        end
+        e = de_next[e]
+      end
+      return r
+    end
+    when p = PR_DICTCOPY then do
+      if kindof(rcv) \= KD_DICT then return 0
+      return shallow_copy(rcv)
+    end
+    when p = PR_DICTSIZE then do
+      if kindof(rcv) \= KD_DICT then return 0
+      return mkint(dd_n[o_x[rcv % 2]])
+    end
+    otherwise return 0
+  end
+  return 0
+
+split_str: procedure = .int
+  arg s = .string, seps = .string
+  n = .int
+  i = .int
+  j = .int
+  r = .int
+  k = .int
+  tmp = .string[]
+  n = 0
+  i = 1
+  do while i <= length(s)
+    /* skip separators */
+    do while i <= length(s) & pos(substr(s, i, 1), seps) > 0
+      i = i + 1
+    end
+    if i > length(s) then leave
+    j = i
+    do while j <= length(s) & pos(substr(s, j, 1), seps) = 0
+      j = j + 1
+    end
+    n = n + 1
+    tmp[n] = substr(s, i, j - i)
+    i = j
+  end
+  r = mkarray(n)
+  do k = 1 to n
+    sl[o_slot[r % 2] + k - 1] = mkstr(tmp[k])
+  end
+  return r
+
+parse_number: procedure = .int
+  arg s0 = .string
+  s = .string
+  neg = .int
+  q = .int
+  p = .int
+  isf = .int
+  s = strip(s0)
+  if s == "" then return nil_oop
+  neg = 0
+  if left(s, 1) == "-" then do
+    neg = 1
+    s = substr(s, 2)
+  end
+  q = verify(s, "0123456789", "N")
+  if q = 0 then do
+    if s == "" then return nil_oop
+    if neg = 1 then s = "-" || s
+    return big_norm(s)
+  end
+  if q = 1 then return nil_oop
+  /* real number */
+  isf = 0
+  if substr(s, q, 1) == "." & isdigit(substr(s, q + 1, 1)) = 1 then do
+    p = verify(s, "0123456789", "N", q + 1)
+    if p = 0 then p = length(s) + 1
+    q = p
+    isf = 1
+  end
+  if upper(substr(s, q, 1)) == "E" then do
+    p = q + 1
+    if substr(s, p, 1) == "-" | substr(s, p, 1) == "+" then p = p + 1
+    q = verify(s, "0123456789", "N", p)
+    if q = 0 then q = length(s) + 1
+    isf = 1
+  end
+  s = left(s, q - 1)
+  if isf = 1 then do
+    if neg = 1 then return mkfloat(0.0 - (upper(s) as .float))
+    return mkfloat(upper(s) as .float)
+  end
+  if neg = 1 then s = "-" || s
+  return big_norm(s)
+
+/* blocks, exceptions, classes, system */
+prim_c: procedure = .int
+  arg p = .int, rcv = .int, base = .int, na = .int
+  a1 = .int
+  a2 = .int
+  s = .string
+  t = .string
+  i = .int
+  j = .int
+  k = .int
+  r = .int
+  n = .int
+  o = .int
+  e = .int
+  c = .int
+  v = .int
+  id = .int
+  oldtop = .int
+  sv_u = .int
+  sv_t = .int
+  sv_v = .int
+  b2 = .int
+  a1 = ast[base + 1]
+  a2 = ast[base + 2]
+  select
+    when p = PR_BLOCKVALUE then do
+      if kindof(rcv) \= KD_BLK then return 0
+      if n_b[o_x[rcv % 2]] \= na then do
+        call st_error rcv, "wrong argument count"
+        return 0
+      end
+      return call_block(rcv, base, na)
+    end
+    when p = PR_BLOCKVALUEARGS then do
+      if kindof(rcv) \= KD_BLK | kindof(a1) \= KD_ARR then return 0
+      n = o_n[a1 % 2] - c_ninst[o_cls[a1 % 2]]
+      if n_b[o_x[rcv % 2]] \= n then do
+        call st_error rcv, "wrong argument count"
+        return 0
+      end
+      b2 = asp
+      do i = 0 to n - 1
+        asp = asp + 1
+        ast[asp] = sl[o_slot[a1 % 2] + c_ninst[o_cls[a1 % 2]] + i]
+      end
+      r = call_block(rcv, b2, n)
+      asp = b2
+      return r
+    end
+    when p = PR_BLOCKNUMARGS then do
+      if kindof(rcv) \= KD_BLK then return 0
+      return mkint(n_b[o_x[rcv % 2]])
+    end
+    when p = PR_WHILETRUE | p = PR_WHILEFALSE then do
+      if kindof(rcv) \= KD_BLK then return 0
+      do forever
+        v = call_block(rcv, asp, 0)
+        if unw > 0 then return 0
+        if p = PR_WHILETRUE & v \= true_oop then leave
+        if p = PR_WHILEFALSE & v \= false_oop then leave
+        if na >= 1 then do
+          v = call_block(a1, asp, 0)
+          if unw > 0 then return 0
+        end
+      end
+      return nil_oop
+    end
+    when p = PR_ONDO then do
+      /* rcv on: exceptionClass do: handlerBlock */
+      if kindof(rcv) \= KD_BLK then return 0
+      oldtop = htop
+      do forever
+        hid = hid + 1
+        id = hid
+        htop = oldtop + 1
+        h_cls[htop] = a1
+        h_blk[htop] = a2
+        h_id[htop] = id
+        v = call_block(rcv, asp, 0)
+        htop = oldtop
+        if unw = UW_EXC & unw_t = id then do
+          unw = UW_NONE
+          return unw_v
+        end
+        if unw = UW_RETRY & unw_t = id then do
+          unw = UW_NONE
+          iterate
+        end
+        if unw > 0 then return 0
+        return v
+      end
+    end
+    when p = PR_ENSURE | p = PR_IFCURTAILED then do
+      if kindof(rcv) \= KD_BLK then return 0
+      v = call_block(rcv, asp, 0)
+      if p = PR_IFCURTAILED & unw = UW_NONE then return v
+      sv_u = unw
+      sv_t = unw_t
+      sv_v = unw_v
+      oldtop = htop
+      unw = UW_NONE
+      r = call_block(a1, asp, 0)
+      htop = oldtop
+      if unw = UW_NONE then do
+        unw = sv_u
+        unw_t = sv_t
+        unw_v = sv_v
+      end
+      if unw > 0 then return 0
+      return v
+    end
+    when p = PR_SIGNAL then return do_signal(rcv, htop, 1)
+    when p = PR_RESUME then do
+      /* rcv resume: value */
+      unw = UW_RESUME
+      unw_t = intval(slot_get(rcv, 2))
+      unw_v = a1
+      return 0
+    end
+    when p = PR_RETURN then do
+      k = intval(slot_get(rcv, 1))
+      if k < 1 | k > htop + 50 then do
+        call st_error rcv, "return: outside of a handler"
+        return 0
+      end
+      unw = UW_EXC
+      unw_t = h_id[k]
+      unw_v = a1
+      return 0
+    end
+    when p = PR_RETRY then do
+      k = intval(slot_get(rcv, 1))
+      unw = UW_RETRY
+      unw_t = h_id[k]
+      unw_v = nil_oop
+      return 0
+    end
+    when p = PR_PASS | p = PR_OUTER then do
+      k = intval(slot_get(rcv, 1))
+      v = do_signal(rcv, k - 1, 0)
+      if unw > 0 then return 0
+      if p = PR_PASS then do
+        unw = UW_EXC
+        unw_t = h_id[k]
+        unw_v = v
+        return 0
+      end
+      return v
+    end
+    when p = PR_CLSNAME then do
+      if rcv // 2 \= 0 then return 0
+      return mkstr(c_name[o_x[rcv % 2]])
+    end
+    when p = PR_CLSSUPER then do
+      if rcv // 2 \= 0 then return 0
+      k = c_super[o_x[rcv % 2]]
+      if k = 0 then return nil_oop
+      return c_oop[k]
+    end
+    when p = PR_CLSSUBCLASS then do
+      if rcv // 2 \= 0 then return 0
+      s = strof(a1)
+      if s == "" then return 0
+      return c_oop[define_class(s, o_x[rcv % 2])]
+    end
+    when p = PR_CLSADDIVAR then do
+      s = strof(a1)
+      if s == "" then return 0
+      call add_ivar o_x[rcv % 2], s
+      return rcv
+    end
+    when p = PR_CLSIVARS then do
+      return mkstr(c_ivn[o_x[rcv % 2]])
+    end
+    when p = PR_CLSSELECTORS then do
+      k = o_x[rcv % 2]
+      n = 0
+      do i = 1 to nsel
+        if cm[k * SELMAX + i] > 0 then n = n + 1
+      end
+      r = mkarray(n)
+      j = 0
+      do i = 1 to nsel
+        if cm[k * SELMAX + i] > 0 then do
+          sl[o_slot[r % 2] + j] = mksym(sel_name[i])
+          j = j + 1
+        end
+      end
+      return r
+    end
+    when p = PR_CLSINCLUDES then do
+      s = strof(a1)
+      if s == "" then return 0
+      return mkbool(cm[o_x[rcv % 2] * SELMAX + selid(s)] > 0)
+    end
+    when p = PR_CLSADDCVAR then do
+      s = strof(a1)
+      if s == "" then return 0
+      k = o_x[rcv % 2]
+      if c_ismeta[k] = 1 then k = c_this[k]
+      if cvmap[k || "." || s] == "" then do
+        ng = ng + 1
+        g_val[ng] = nil_oop
+        g_name[ng] = s
+        cvmap[k || "." || s] = ng
+      end
+      return rcv
+    end
+    when p = PR_CLSLOOKUP then do
+      s = strof(a1)
+      if s == "" then return 0
+      return mkbool(lookup(o_x[rcv % 2], selid(s)) > 0)
+    end
+    when p = PR_CLSSUBCLASSES then do
+      k = o_x[rcv % 2]
+      n = 0
+      do i = 1 to nc
+        if c_super[i] = k & c_ismeta[i] = 0 then n = n + 1
+      end
+      r = mkarray(n)
+      j = 0
+      do i = 1 to nc
+        if c_super[i] = k & c_ismeta[i] = 0 then do
+          sl[o_slot[r % 2] + j] = c_oop[i]
+          j = j + 1
+        end
+      end
+      return r
+    end
+    when p = PR_GLOBALAT then do
+      s = strof(a1)
+      if s == "" | gmap[s] == "" then return 0
+      return g_val[gcell(s)]
+    end
+    when p = PR_GLOBALATPUT then do
+      s = strof(a1)
+      if s == "" then return 0
+      call gset s, a2
+      return a2
+    end
+    when p = PR_GLOBALHAS then do
+      s = strof(a1)
+      if s == "" then return 0
+      return mkbool(gmap[s] \== "")
+    end
+    when p = PR_TRANSCRIPT then do
+      if isstr(a1) = 1 then call outs o_s[a1 % 2]
+      else if a1 // 2 \= 0 then call outs intval(a1) as .string
+      else return 0
+      return rcv
+    end
+    when p = PR_STDINLINE then do
+      r = read_stdin_line()
+      if r = 0 then return nil_oop
+      return r
+    end
+    when p = PR_STDINATEND then return mkbool(stdin_eof = 1)
+    when p = PR_MSECS then do
+      s = time("E")
+      return mkint(rxfloat..trunc((s as .float) * 1000.0) as .int)
+    end
+    when p = PR_SECS then return mkint(0)
+    when p = PR_HALT then do
+      call outs "halt" || '0a'x
+      unw = UW_ABORT
+      return 0
+    end
+    when p = PR_EXIT then do
+      if a1 // 2 \= 0 then rc_exit = intval(a1)
+      unw = UW_EXIT
+      return 0
+    end
+    when p = PR_ISNIL then return mkbool(rcv = nil_oop)
+    when p = PR_DISPLAYSTRING then do
+      if isstr(rcv) = 1 then return mkstr(o_s[rcv % 2])
+      if numkind(rcv) > 0 then return prim_a(PR_PRINTSTRING, rcv, base, 0)
+      if kindof(rcv) = KD_CHR then return mkstr(d2c(o_x[rcv % 2]))
+      return 0
+    end
+    when p = PR_EVALSTRING then do
+      if isstr(a1) = 0 then return 0
+      return eval_string(o_s[a1 % 2])
+    end
+    when p = PR_EXCINFO then do
+      /* a1: 1 = print trace and abort, 2 = print trace only */
+      call print_trace
+      if a1 \= mkint(2) then unw = UW_ABORT
+      return nil_oop
+    end
+    when p = PR_FORMAT then do
+      /* printString: with padding - unused */
+      return 0
+    end
+    when p = PR_RANDOM then do
+      rnd_state = (rnd_state * 1103515245 + 12345) // 2147483648
+      if rnd_state < 0 then rnd_state = 0 - rnd_state
+      if a1 // 2 \= 0 then do
+        if intval(a1) > 0 then return mkint(rnd_state // intval(a1) + 1)
+      end
+      return mkfloat(rnd_state as .float / 2147483648.0)
+    end
+    when p = PR_FLOATPRINT then return 0
+    when p = PR_BIGOP then return 0
+    otherwise return 0
+  end
+  return 0
+
+read_stdin_line: procedure = .int
+  line = .string
+  e = .int
+  if stdin_eof = 1 then return 0
+  line = ""
+  assembler freadline line, h_in
+  assembler feof e, h_in
+  if e > 0 & length(line) = 0 then do
+    stdin_eof = 1
+    return 0
+  end
+  if right(line, 1) == '0d'x then line = left(line, length(line) - 1)
+  return mkstr(line)
+
+/* evaluate a string of statements; the value of the last one is returned */
+eval_string: procedure = .int
+  arg text = .string
+  sv_txt = .string
+  sv_tp = .int
+  sv_len = .int
+  sv_tk = .int
+  sv_ts = .string
+  sv_ti = .int
+  sv_tf = .float
+  sv_tpos = .int
+  sv_pkh = .int
+  sv_pkt = .int
+  sv_pks = .string
+  sv_pki = .int
+  sv_pkf = .float
+  sv_pkp = .int
+  sv_pe = .int
+  seq = .int
+  fb = .int
+  v = .int
+  sv_lvl = .int
+  sv_envn = .int
+  sv_cls = .int
+  sv_nx = .int
+  sv_txt = txt
+  sv_tp = tp
+  sv_len = tlen
+  sv_tk = tk
+  sv_ts = ts
+  sv_ti = ti
+  sv_tf = tf
+  sv_tpos = tpos
+  sv_pkh = pk_have
+  sv_pkt = pk_t
+  sv_pks = pk_s
+  sv_pki = pk_i
+  sv_pkf = pk_f
+  sv_pkp = pk_p
+  sv_pe = pe
+  sv_lvl = lvl
+  sv_envn = envn
+  sv_cls = r_cls
+  sv_nx = sc_max[1]
+  txt = text
+  tp = 1
+  tlen = length(text)
+  pk_have = 0
+  pe = 0
+  call advance
+  pm_ntemps = 0
+  if isbin("|") = 1 then pm_ntemps = parse_temps()
+  seq = parse_stmts(TK_EOF)
+  v = nil_oop
+  if pe = 0 then do
+    call start_scope cls_UndefinedObject
+    call rs_seq seq
+    fb = alloc_frame(4 + sc_max[1])
+    vp[fb] = 0
+    vp[fb + 1] = fb
+    vp[fb + 2] = nil_oop
+    vp[fb + 3] = 0
+    call init_temps fb + 4, sc_max[1]
+    v = ev(seq, fb)
+    if unw = UW_RET then do
+      unw = UW_NONE
+      v = unw_v
+    end
+    if unw > 0 then v = nil_oop
+  end
+  txt = sv_txt
+  tp = sv_tp
+  tlen = sv_len
+  tk = sv_tk
+  ts = sv_ts
+  ti = sv_ti
+  tf = sv_tf
+  tpos = sv_tpos
+  pk_have = sv_pkh
+  pk_t = sv_pkt
+  pk_s = sv_pks
+  pk_i = sv_pki
+  pk_f = sv_pkf
+  pk_p = sv_pkp
+  pe = sv_pe
+  lvl = sv_lvl
+  envn = sv_envn
+  r_cls = sv_cls
+  return v

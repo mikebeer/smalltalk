@@ -1,0 +1,367 @@
+
+/* ---------------------------------------------------------------------
+   Objects.  An oop is 2*index for heap objects, 2*n+1 for SmallIntegers.
+   --------------------------------------------------------------------- */
+mkint: procedure = .int
+  arg n = .int
+  return n * 2 + 1
+
+intval: procedure = .int
+  arg x = .int
+  return (x - 1) % 2
+
+newobj: procedure = .int
+  arg cls = .int, kind = .int, n = .int
+  i = .int
+  no = no + 1
+  o_cls[no] = cls
+  o_kind[no] = kind
+  o_n[no] = n
+  o_x[no] = 0
+  o_s[no] = ""
+  o_f[no] = 0.0
+  o_slot[no] = nsl + 1
+  do i = 1 to n
+    nsl = nsl + 1
+    sl[nsl] = nil_oop
+  end
+  return no * 2
+
+slot_get: procedure = .int
+  arg o = .int, i = .int
+  return sl[o_slot[o % 2] + i]
+
+slot_put: procedure = .void
+  arg o = .int, i = .int, v = .int
+  sl[o_slot[o % 2] + i] = v
+  return
+
+mkstr: procedure = .int
+  arg s = .string
+  o = .int
+  o = newobj(cls_String, KD_STR, 0)
+  o_s[o % 2] = s
+  return o
+
+mksym: procedure = .int
+  arg s = .string
+  o = .int
+  v = .string
+  v = symtab[s]
+  if v \== "" then return v as .int
+  o = newobj(cls_Symbol, KD_SYM, 0)
+  o_s[o % 2] = s
+  symtab[s] = o
+  return o
+
+mkfloat: procedure = .int
+  arg f = .float
+  o = .int
+  o = newobj(cls_Float, KD_FLT, 0)
+  o_f[o % 2] = f
+  return o
+
+mkchar: procedure = .int
+  arg code = .int
+  o = .int
+  if code < 0 | code > 255 then code = 63
+  if chr_oop[code + 1] = 0 then do
+    o = newobj(cls_Character, KD_CHR, 0)
+    o_x[o % 2] = code
+    chr_oop[code + 1] = o
+  end
+  return chr_oop[code + 1]
+
+mkarray: procedure = .int
+  arg n = .int
+  return newobj(cls_Array, KD_ARR, n)
+
+mkbool: procedure = .int
+  arg b = .int
+  if b = 1 then return true_oop
+  return false_oop
+
+/* class number of any oop */
+cof: procedure = .int
+  arg x = .int
+  if x // 2 \= 0 then return cls_SmallInteger
+  return o_cls[x % 2]
+
+kindof: procedure = .int
+  arg x = .int
+  if x // 2 \= 0 then return -1
+  return o_kind[x % 2]
+
+/* string contents of a String or Symbol (or "" for anything else) */
+strof: procedure = .string
+  arg x = .int
+  k = .int
+  if x // 2 \= 0 then return ""
+  k = o_kind[x % 2]
+  if k = KD_STR | k = KD_SYM | k = KD_BIG then return o_s[x % 2]
+  return ""
+
+isstr: procedure = .int
+  arg x = .int
+  if x // 2 \= 0 then return 0
+  if o_kind[x % 2] = KD_STR | o_kind[x % 2] = KD_SYM then return 1
+  return 0
+
+/* ---------------------------------------------------------------------
+   Globals, selectors
+   --------------------------------------------------------------------- */
+gcell: procedure = .int
+  arg nme = .string
+  v = .string
+  v = gmap[nme]
+  if v \== "" then return v as .int
+  ng = ng + 1
+  g_val[ng] = nil_oop
+  g_name[ng] = nme
+  gmap[nme] = ng
+  return ng
+
+gset: procedure = .void
+  arg nme = .string, v = .int
+  g_val[gcell(nme)] = v
+  return
+
+selid: procedure = .int
+  arg nme = .string
+  v = .string
+  n = .int
+  p = .int
+  v = selmap[nme]
+  if v \== "" then return v as .int
+  nsel = nsel + 1
+  if nsel >= SELMAX then do
+    call outs "too many selectors" || '0a'x
+    return 1
+  end
+  sel_name[nsel] = nme
+  n = 0
+  if isletter(left(nme, 1)) = 1 then n = length(nme) - length(translate(nme, "", ":"))
+  else n = 1
+  sel_n[nsel] = n
+  selmap[nme] = nsel
+  return nsel
+
+/* ---------------------------------------------------------------------
+   Classes
+   --------------------------------------------------------------------- */
+find_class: procedure = .int
+  arg nme = .string
+  v = .string
+  v = cmap[nme]
+  if v == "" then return 0
+  return v as .int
+
+mkclassrec: procedure = .int
+  arg nme = .string, sup = .int
+  c = .int
+  nc = nc + 1
+  c = nc
+  c_name[c] = nme
+  c_super[c] = sup
+  c_meta[c] = 0
+  c_ismeta[c] = 0
+  c_this[c] = 0
+  c_kind[c] = KD_PLAIN
+  c_ninst[c] = 0
+  c_ivn[c] = ""
+  c_oop[c] = 0
+  if sup > 0 then do
+    c_kind[c] = c_kind[sup]
+    c_ninst[c] = c_ninst[sup]
+    c_ivn[c] = c_ivn[sup]
+  end
+  return c
+
+/* create (or reopen) class nme with superclass sup (0 = none) */
+define_class: procedure = .int
+  arg nme = .string, sup = .int
+  c = .int
+  m = .int
+  msup = .int
+  o = .int
+  c = find_class(nme)
+  if c > 0 then do
+    if c_super[c] \= sup then do
+      c_super[c] = sup
+      if sup > 0 then do
+        c_ivn[c] = c_ivn[sup]
+        c_ninst[c] = c_ninst[sup]
+        c_kind[c] = c_kind[sup]
+        c_super[c_meta[c]] = c_meta[sup]
+      end
+      gen = gen + 1
+    end
+    return c
+  end
+  c = mkclassrec(nme, sup)
+  if sup > 0 then msup = c_meta[sup]
+  else msup = cls_Class
+  m = mkclassrec(nme || " class", msup)
+  c_ismeta[m] = 1
+  c_this[m] = c
+  c_meta[c] = m
+  if sup > 0 then do
+    c_ninst[m] = c_ninst[msup]
+    c_ivn[m] = c_ivn[msup]
+  end
+  else do
+    c_ninst[m] = 0
+    c_ivn[m] = ""
+  end
+  c_kind[m] = KD_PLAIN
+  o = newobj(m, KD_CLS, c_ninst[m])
+  o_x[o % 2] = c
+  c_oop[c] = o
+  o = newobj(cls_Metaclass, KD_META, 0)
+  o_x[o % 2] = m
+  c_oop[m] = o
+  cmap[nme] = c
+  call gset nme, c_oop[c]
+  if nme == "Class" then cls_Class = c
+  return c
+
+add_ivar: procedure = .void
+  arg c = .int, nme = .string
+  k = .int
+  oldn = .int
+  if wordpos(nme, c_ivn[c]) > 0 then return
+  oldn = words(c_ivn[c])
+  c_ivn[c] = strip(c_ivn[c] || " " || nme)
+  c_ninst[c] = oldn + 1
+  do k = 1 to nc
+    if c_super[k] = c then call ivar_inherit k, oldn, c
+  end
+  /* class-side variables: grow the slots of the class objects */
+  do k = 1 to nc
+    if c_ismeta[k] = 1 & c_oop[c_this[k]] > 0 then do
+      if inherits(k, c) = 1 then call grow_class_slots c_this[k]
+    end
+  end
+  return
+
+ivar_inherit: procedure = .void
+  arg k = .int, oldn = .int, parent = .int
+  own = .string
+  kold = .int
+  j = .int
+  kold = words(c_ivn[k])
+  own = ""
+  if kold > oldn then own = subword(c_ivn[k], oldn + 1)
+  c_ivn[k] = strip(c_ivn[parent] || " " || own)
+  c_ninst[k] = words(c_ivn[k])
+  do j = 1 to nc
+    if c_super[j] = k then call ivar_inherit j, kold, k
+  end
+  return
+
+grow_class_slots: procedure = .void
+  arg c = .int
+  o = .int
+  need = .int
+  have = .int
+  i = .int
+  old = .int
+  base = .int
+  o = c_oop[c] % 2
+  need = c_ninst[c_meta[c]]
+  have = o_n[o]
+  if need <= have then return
+  old = o_slot[o]
+  base = nsl + 1
+  do i = 0 to have - 1
+    nsl = nsl + 1
+    sl[nsl] = sl[old + i]
+  end
+  do i = have + 1 to need
+    nsl = nsl + 1
+    sl[nsl] = nil_oop
+  end
+  o_slot[o] = base
+  o_n[o] = need
+  return
+
+/* ---------------------------------------------------------------------
+   Methods
+   --------------------------------------------------------------------- */
+install_method: procedure = .int
+  arg c = .int, sel = .int, nargs = .int, body = .int, ntemps = .int, hasblk = .int, prim = .int
+  m = .int
+  nmeth = nmeth + 1
+  m = nmeth
+  m_sel[m] = sel
+  m_cls[m] = c
+  m_nargs[m] = nargs
+  m_body[m] = body
+  m_ntemps[m] = ntemps
+  m_hasblk[m] = hasblk
+  m_prim[m] = prim
+  cm[c * SELMAX + sel] = m
+  gen = gen + 1
+  return m
+
+lookup: procedure = .int
+  arg c = .int, sel = .int
+  i = .int
+  k = .int
+  m = .int
+  i = c * SELMAX + sel
+  if lkg[i] = gen then return lk[i]
+  m = 0
+  k = c
+  do while k > 0
+    m = cm[k * SELMAX + sel]
+    if m > 0 then leave
+    k = c_super[k]
+  end
+  lk[i] = m
+  lkg[i] = gen
+  return m
+
+/* is class c a subclass of (or equal to) d ? */
+inherits: procedure = .int
+  arg c = .int, d = .int
+  k = .int
+  k = c
+  do while k > 0
+    if k = d then return 1
+    k = c_super[k]
+  end
+  return 0
+
+/* class variables: name -> cell (searching up the superclass chain) */
+find_cvar: procedure = .int
+  arg c0 = .int, nme = .string
+  c = .int
+  v = .string
+  c = c0
+  if c_ismeta[c] = 1 then c = c_this[c]
+  do while c > 0
+    v = cvmap[c || "." || nme]
+    if v \== "" then return v as .int
+    c = c_super[c]
+  end
+  return 0
+
+define_classvar: procedure = .void
+  arg c0 = .int, nme = .string, e = .int
+  c = .int
+  cell = .int
+  v = .int
+  c = c0
+  if c_ismeta[c] = 1 then c = c_this[c]
+  cell = find_cvar(c, nme)
+  if cell = 0 | cvmap[c || "." || nme] == "" then do
+    ng = ng + 1
+    g_val[ng] = nil_oop
+    g_name[ng] = nme
+    cvmap[c || "." || nme] = ng
+    cell = ng
+  end
+  v = eval_in_class(c, e)
+  g_val[cell] = v
+  return

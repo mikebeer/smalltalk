@@ -1,0 +1,26 @@
+#'Hello, World'
+#foo
+#+
+#with:with:
+999999999999999999
+10
+3
+3
+2
+2
+1
+Object: a CountingStack error: stack empty
+CountingStack(Object)>>error:
+CountingStack(Stack)>>pop
+UndefinedObject>>executeStatements
+ok
+3
+2
+1
+2000
+survived
+2
+BlockContext>>cannotReturn: non-local return from a dead method context
+after dead return
+BlockContext>>cannotReturn: non-local return from a dead method context
+after dead return

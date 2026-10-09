@@ -1,0 +1,428 @@
+
+/* ---------------------------------------------------------------------
+   Resolver: turns the raw syntax tree into executable nodes in place
+   --------------------------------------------------------------------- */
+declare_var: procedure = .int
+  arg nme = .string
+  s = .int
+  s = sc_next[lvl]
+  sc_next[lvl] = s + 1
+  if s + 1 > sc_max[lvl] then sc_max[lvl] = s + 1
+  envn = envn + 1
+  env_name[envn] = nme
+  env_slot[envn] = s
+  env_lvl[envn] = lvl
+  return s
+
+/* sets rv_kind (1 local, 2 ivar, 3 global cell), rv_a, rv_b */
+lookup_var: procedure = .void
+  arg nme = .string
+  k = .int
+  w = .int
+  do k = envn to 1 by -1
+    if env_name[k] == nme then do
+      rv_kind = 1
+      rv_a = lvl - env_lvl[k]
+      rv_b = env_slot[k]
+      return
+    end
+  end
+  w = wordpos(nme, c_ivn[r_cls])
+  if w > 0 then do
+    rv_kind = 2
+    rv_a = w - 1
+    return
+  end
+  k = find_cvar(r_cls, nme)
+  if k > 0 then do
+    rv_kind = 3
+    rv_a = k
+    return
+  end
+  rv_kind = 3
+  rv_a = gcell(nme)
+  return
+
+rs_list: procedure = .void
+  arg first = .int, n = .int
+  i = .int
+  do i = first to first + n - 1
+    al[i] = rs(al[i])
+  end
+  return
+
+rs_seq: procedure = .void
+  arg n = .int
+  call rs_list n_a[n], n_b[n]
+  return
+
+/* an inlined block: declare its parameters and temporaries, resolve the body */
+inline_block: procedure = .int
+  arg b = .int
+  first = .int
+  sv = .int
+  i = .int
+  body = .int
+  sv = envn
+  first = -1
+  do i = 0 to n_c[b] - 1
+    ib_slot = declare_var(nl_name[n_b[b] + i])
+    if first < 0 then first = ib_slot
+  end
+  do i = 0 to n_i[b] - 1
+    ib_slot = declare_var(nl_name[n_d[b] + i])
+  end
+  body = n_a[b]
+  call rs_seq body
+  envn = sv
+  ib_first = first
+  return body
+
+is_blk: procedure = .int
+  arg n = .int, np = .int
+  if nt[n] = ND_RBLOCK & n_c[n] = np then return 1
+  return 0
+
+is_blk01: procedure = .int
+  arg n = .int
+  if nt[n] = ND_RBLOCK & n_c[n] <= 1 then return 1
+  return 0
+
+rs: procedure = .int
+  arg n = .int
+  t = .int
+  nme = .string
+  k = .int
+  s = .string
+  a1 = .int
+  a2 = .int
+  a3 = .int
+  a4 = .int
+  i = .int
+  f = .int
+  sv = .int
+  r = .int
+  ok = .int
+  t = nt[n]
+  select
+    when t = ND_LIT | t = ND_SELF | t = ND_THISCTX then nop
+    when t = ND_RVAR then do
+      nme = n_s[n]
+      if nme == "self" | nme == "super" then nt[n] = ND_SELF
+      else do
+        call lookup_var nme
+        if rv_kind = 1 then do
+          nt[n] = ND_LOCAL
+          n_a[n] = rv_a
+          n_b[n] = rv_b
+        end
+        else if rv_kind = 2 then do
+          nt[n] = ND_IVAR
+          n_a[n] = rv_a
+        end
+        else do
+          nt[n] = ND_GVAR
+          n_a[n] = rv_a
+        end
+      end
+    end
+    when t = ND_RASG then do
+      n_c[n] = rs(n_a[n])
+      call lookup_var n_s[n]
+      if rv_kind = 1 then do
+        nt[n] = ND_ASGL
+        n_a[n] = rv_a
+        n_b[n] = rv_b
+      end
+      else if rv_kind = 2 then do
+        nt[n] = ND_ASGI
+        n_a[n] = rv_a
+      end
+      else do
+        nt[n] = ND_ASGG
+        n_a[n] = rv_a
+      end
+    end
+    when t = ND_RRET then do
+      n_a[n] = rs(n_a[n])
+      nt[n] = ND_RET
+      if lvl > 1 then n_i[n] = 1
+      else n_i[n] = 0
+    end
+    when t = ND_SEQ then call rs_seq n
+    when t = ND_BRACE then call rs_list n_a[n], n_b[n]
+    when t = ND_RBLOCK then do
+      /* a real block: its own scope level */
+      sv = envn
+      sc_blk[lvl] = 1
+      lvl = lvl + 1
+      sc_next[lvl] = 0
+      sc_max[lvl] = 0
+      sc_blk[lvl] = 0
+      do i = 0 to n_c[n] - 1
+        k = declare_var(nl_name[n_b[n] + i])
+      end
+      do i = 0 to n_i[n] - 1
+        k = declare_var(nl_name[n_d[n] + i])
+      end
+      call rs_seq n_a[n]
+      nt[n] = ND_BLOCK
+      n_b[n] = n_c[n]
+      n_c[n] = sc_max[lvl]
+      n_d[n] = sc_blk[lvl]
+      lvl = lvl - 1
+      envn = sv
+    end
+    when t = ND_RCASC then do
+      n_a[n] = rs(n_a[n])
+      f = n_b[n]
+      do i = f to f + n_c[n] - 1
+        k = al[i]
+        call rs_list n_b[k], n_i[k]
+        n_c[k] = selid(n_s[k])
+        nt[k] = ND_MSG
+      end
+      nt[n] = ND_CASC
+    end
+    when t = ND_RSEND then do
+      s = n_s[n]
+      r = inline_send(n, s)
+      if r = 0 then do
+        n_a[n] = rs(n_a[n])
+        call rs_list n_b[n], n_i[n]
+        n_c[n] = selid(s)
+        nt[n] = ND_SEND
+      end
+    end
+    otherwise nop
+  end
+  return n
+
+/* try to compile a control-flow message inline; returns 1 if done */
+inline_send: procedure = .int
+  arg n = .int, s = .string
+  rcv = .int
+  f = .int
+  na = .int
+  a1 = .int
+  a2 = .int
+  a3 = .int
+  c = .int
+  b1 = .int
+  b2 = .int
+  st = .int
+  sl1 = .int
+  fv = .int
+  a1 = 0
+  a2 = 0
+  a3 = 0
+  rcv = n_a[n]
+  f = n_b[n]
+  na = n_i[n]
+  if na >= 1 then a1 = al[f]
+  if na >= 2 then a2 = al[f + 1]
+  if na >= 3 then a3 = al[f + 2]
+  if s == "ifTrue:" & is_blk(a1, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    n_c[n] = 0
+    nt[n] = ND_IF
+    return 1
+  end
+  if s == "ifFalse:" & is_blk(a1, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_c[n] = inline_block(a1)
+    n_b[n] = 0
+    nt[n] = ND_IF
+    return 1
+  end
+  if s == "ifTrue:ifFalse:" & is_blk(a1, 0) = 1 & is_blk(a2, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    n_c[n] = inline_block(a2)
+    nt[n] = ND_IF
+    return 1
+  end
+  if s == "ifFalse:ifTrue:" & is_blk(a1, 0) = 1 & is_blk(a2, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_c[n] = inline_block(a1)
+    n_b[n] = inline_block(a2)
+    nt[n] = ND_IF
+    return 1
+  end
+  if (s == "and:" | s == "or:") & is_blk(a1, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    if s == "and:" then nt[n] = ND_AND
+    else nt[n] = ND_OR
+    return 1
+  end
+  if (s == "whileTrue:" | s == "whileFalse:") & is_blk(rcv, 0) = 1 & is_blk(a1, 0) = 1 then do
+    n_a[n] = inline_block(rcv)
+    n_b[n] = inline_block(a1)
+    if s == "whileTrue:" then n_i[n] = 1
+    else n_i[n] = 0
+    nt[n] = ND_WHILE
+    return 1
+  end
+  if (s == "whileTrue" | s == "whileFalse") & is_blk(rcv, 0) = 1 then do
+    n_a[n] = inline_block(rcv)
+    n_b[n] = 0
+    if s == "whileTrue" then n_i[n] = 1
+    else n_i[n] = 0
+    nt[n] = ND_WHILE
+    return 1
+  end
+  if s == "repeat" & is_blk(rcv, 0) = 1 then do
+    n_a[n] = inline_block(rcv)
+    nt[n] = ND_REPEAT
+    return 1
+  end
+  if s == "timesRepeat:" & is_blk(a1, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    nt[n] = ND_TIMES
+    return 1
+  end
+  if s == "to:do:" & is_blk(a2, 1) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = rs(a1)
+    n_c[n] = inline_block(a2)
+    n_i[n] = ib_first
+    n_d[n] = 0
+    nt[n] = ND_TODO
+    return 1
+  end
+  if s == "to:by:do:" & is_blk(a3, 1) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = rs(a1)
+    st = rs(a2)
+    n_c[n] = inline_block(a3)
+    n_i[n] = ib_first
+    n_d[n] = st
+    nt[n] = ND_TODO
+    return 1
+  end
+  if s == "ifNil:" & is_blk(a1, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    n_c[n] = 0
+    n_d[n] = 1
+    n_i[n] = -1
+    nt[n] = ND_IFNIL
+    return 1
+  end
+  if s == "ifNotNil:" & is_blk01(a1) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = 0
+    n_c[n] = inline_block(a1)
+    n_i[n] = -1
+    if n_c[a1] = 1 then n_i[n] = ib_first
+    n_d[n] = 0
+    nt[n] = ND_IFNIL
+    return 1
+  end
+  if s == "ifNil:ifNotNil:" & is_blk(a1, 0) = 1 & is_blk01(a2) = 1 then do
+    n_a[n] = rs(rcv)
+    n_b[n] = inline_block(a1)
+    sl1 = 0
+    c = inline_block(a2)
+    n_c[n] = c
+    n_i[n] = -1
+    if n_c[a2] = 1 then n_i[n] = ib_first
+    n_d[n] = 0
+    nt[n] = ND_IFNIL
+    return 1
+  end
+  if s == "ifNotNil:ifNil:" & is_blk01(a1) = 1 & is_blk(a2, 0) = 1 then do
+    n_a[n] = rs(rcv)
+    c = inline_block(a1)
+    n_c[n] = c
+    n_i[n] = -1
+    if n_c[a1] = 1 then n_i[n] = ib_first
+    n_b[n] = inline_block(a2)
+    n_d[n] = 0
+    nt[n] = ND_IFNIL
+    return 1
+  end
+  return 0
+
+/* ---------------------------------------------------------------------
+   Entry points
+   --------------------------------------------------------------------- */
+start_scope: procedure = .void
+  arg c = .int
+  r_cls = c
+  envn = 0
+  lvl = 1
+  sc_next[1] = 0
+  sc_max[1] = 0
+  sc_blk[1] = 0
+  return
+
+compile_method: procedure = .void
+  arg c = .int, sel = .string, pfirst = .int, np = .int, tfirst = .int, ntemps = .int, body = .int, prim = .int, startp = .int
+  i = .int
+  k = .int
+  m = .int
+  call start_scope c
+  do i = 0 to np - 1
+    k = declare_var(nl_name[pfirst + i])
+  end
+  do i = 0 to ntemps - 1
+    k = declare_var(nl_name[tfirst + i])
+  end
+  call rs_seq body
+  m = install_method(c, selid(sel), np, body, sc_max[1], sc_blk[1], prim)
+  m_src[m] = startp
+  return
+
+/* run a top-level statement (a raw node) */
+run_doit: procedure = .void
+  arg st = .int
+  seq = .int
+  first = .int
+  fb = .int
+  v = .int
+  call start_scope cls_UndefinedObject
+  nal = nal + 1
+  al[nal] = st
+  seq = nd(ND_SEQ, nal, 1, 0, 0, 0, "")
+  call rs_seq seq
+  fb = alloc_frame(4 + sc_max[1])
+  vp[fb + 0] = 0
+  vp[fb + 1] = fb
+  vp[fb + 2] = nil_oop
+  vp[fb + 3] = 0
+  call init_temps fb + 4, sc_max[1]
+  cdepth = 0
+  unw = UW_NONE
+  htop = 0
+  v = ev(seq, fb)
+  if unw > 0 then do
+    if unw = UW_EXIT then halted = 1
+    unw = UW_NONE
+  end
+  htop = 0
+  return
+
+/* evaluate an expression node in the context of a class (class variable initialisers) */
+eval_in_class: procedure = .int
+  arg c = .int, e = .int
+  seq = .int
+  fb = .int
+  v = .int
+  call start_scope c
+  nal = nal + 1
+  al[nal] = e
+  seq = nd(ND_SEQ, nal, 1, 0, 0, 0, "")
+  call rs_seq seq
+  fb = alloc_frame(4 + sc_max[1])
+  vp[fb + 0] = 0
+  vp[fb + 1] = fb
+  vp[fb + 2] = nil_oop
+  vp[fb + 3] = 0
+  call init_temps fb + 4, sc_max[1]
+  v = ev(seq, fb)
+  if unw > 0 then unw = UW_NONE
+  return v

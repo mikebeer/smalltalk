@@ -1,0 +1,61 @@
+Rex says Woof
+Tom says Meow!
+Animal(Rex)
+Object: Animal(x) error: This method is a subclass responsibility
+Animal(Object)>>error:
+Animal(Object)>>subclassResponsibility
+Animal>>speak
+UndefinedObject>>executeStatements
+after
+OrderedCollection (1 4 9 16 25 )
+OrderedCollection (2 5 10 17 26 )
+OrderedCollection (4 16 )
+55
+SortedCollection (1 2 3 )
+(3 2 1 )
+(1 2 3 4 5 )
+OrderedCollection (1 3 5 7 9 )
+HELLO WORLD
+olleh
+$h
+#sym
+$a
+3.14159
+2/3
+1
+1267650600228229401496703205376
+1000000000000000000000000000
+3.16227766016838
+2
+3
+3
+-4
+Set (1 2 3 )
+4
+a Dictionary (#a->1 #b->2 )
+1
+0
+Set (#a #b )
+(1 2 )
+Object: #zz error: key not found
+Dictionary>>at:
+UndefinedObject>>executeStatements
+x
+big
+boom
+5
+7
+5
+7
+Index value 10 out of range: only 3 elements
+Object: (1 2 3 ) error: Index value 10 out of range: only 3 elements
+Array(Object)>>checkIndex:
+Array>>at:
+UndefinedObject>>executeStatements
+Object: 1 error: The program attempted to divide a number by zero
+SmallInteger(Number)>>zeroDivide
+SmallInteger(Number)>>/
+UndefinedObject>>executeStatements
+ensured
+end
+false

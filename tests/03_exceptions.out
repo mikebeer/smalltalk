@@ -1,0 +1,41 @@
+The program attempted to divide a number by zero
+-1
+99
+3
+'resumed'
+42
+'done'
+outer caught
+7
+resignal caught
+8
+handler
+ensure ran
+9
+curtailed
+10
+my error code 5
+MyError
+Object: nil error: my error code 7
+UndefinedObject>>executeStatements
+next
+did not understand #foo
+#foo
+3
+Index value 5 out of range: only 2 elements
+'An exception has occurred'
+'An exception has occurred'
+'custom'
+'set'
+Object: an Error error: Exception>>#resume: non-resumable instance of Error
+UndefinedObject>>executeStatements
+after bad resume
+custom error
+Object: nil error: unhandled
+UndefinedObject(Object)>>error:
+UndefinedObject>>executeStatements
+Object: nil error: direct
+UndefinedObject>>executeStatements
+end
+ensure at top
+retryUsing
