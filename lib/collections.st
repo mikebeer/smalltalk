@@ -766,7 +766,8 @@ Dictionary extend [
 ]
 
 Set extend [
-    add: x [ <primitive: dictAtPut> ]
+    primPut: k with: v [ <primitive: dictAtPut> ]
+    add: x [ self primPut: x with: x. ^x ]
     includes: x [ <primitive: dictHas> ]
     remove: x ifAbsent: aBlock [ ^(self includes: x) ifTrue: [self primRemove: x. x] ifFalse: [aBlock value] ]
     primRemove: x [ <primitive: dictRemove> ]

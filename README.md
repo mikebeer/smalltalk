@@ -42,6 +42,10 @@ it afterwards. Set `CREXX` to the `crexx` driver if it is not on your `PATH`.
 * There is no garbage collector; objects live until the program ends.
 * No processes, no `thisContext`, no class-definition bang (`!`) chunk format.
 
+## Manual
+
+`docs/Smalltalk-CREXX-Guide.pdf` (also as `.docx`) is the language reference and user's guide, 35 pages.
+
 ## Layout
 
 | Path | Contents |
