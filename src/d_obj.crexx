@@ -170,6 +170,8 @@ mkclassrec: procedure = .int
   c_ninst[c] = 0
   c_ivn[c] = ""
   c_oop[c] = 0
+  c_lib[c] = 0
+  if booted = 0 then c_lib[c] = 1
   if sup > 0 then do
     c_kind[c] = c_kind[sup]
     c_ninst[c] = c_ninst[sup]
@@ -186,6 +188,24 @@ define_class: procedure = .int
   o = .int
   c = find_class(nme)
   if c > 0 then do
+    if booted = 1 & c_lib[c] = 1 then do
+      /* the program redefines a library class: start from a clean slate */
+      c_lib[c] = 0
+      m = c_meta[c]
+      do i = 1 to nsel
+        cm[c * SELMAX + i] = 0
+        cm[m * SELMAX + i] = 0
+      end
+      if sup > 0 then do
+        c_ivn[c] = c_ivn[sup]
+        c_ninst[c] = c_ninst[sup]
+      end
+      else do
+        c_ivn[c] = ""
+        c_ninst[c] = 0
+      end
+      gen = gen + 1
+    end
     if c_super[c] \= sup then do
       c_super[c] = sup
       if sup > 0 then do

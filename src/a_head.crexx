@@ -196,6 +196,7 @@ init: procedure = .void
   c_this = .int[]
   c_kind = .int[]
   c_ninst = .int[]
+  c_lib = .int[]
   c_oop = .int[]
   cmap = .stem()
   cvmap = .stem()

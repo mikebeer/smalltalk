@@ -17,7 +17,7 @@ namespace smalltalk expose rc_exit halted booted ob h_out h_in stdin_eof,
    env_name env_slot env_lvl sc_next sc_max sc_blk r_cls r_ntemps r_hasblk,
    ib_first ib_slot rv_kind rv_a rv_b no nsl o_cls o_kind o_n o_slot o_x,
    o_s o_f sl symtab chr_oop nil_oop true_oop false_oop nc c_name c_ivn,
-   c_super c_meta c_ismeta c_this c_kind c_ninst c_oop cmap cvmap,
+   c_super c_meta c_ismeta c_this c_kind c_ninst c_lib c_oop cmap cvmap,
    cls_Object cls_Class cls_Metaclass cls_String cls_Symbol cls_Float,
    cls_Character cls_Array cls_SmallInteger cls_LargePositiveInteger,
    cls_LargeNegativeInteger cls_BlockClosure cls_UndefinedObject,
@@ -212,6 +212,7 @@ init: procedure = .void
   c_this = .int[]
   c_kind = .int[]
   c_ninst = .int[]
+  c_lib = .int[]
   c_oop = .int[]
   cmap = .stem()
   cvmap = .stem()
@@ -2337,6 +2338,8 @@ mkclassrec: procedure = .int
   c_ninst[c] = 0
   c_ivn[c] = ""
   c_oop[c] = 0
+  c_lib[c] = 0
+  if booted = 0 then c_lib[c] = 1
   if sup > 0 then do
     c_kind[c] = c_kind[sup]
     c_ninst[c] = c_ninst[sup]
@@ -2353,6 +2356,24 @@ define_class: procedure = .int
   o = .int
   c = find_class(nme)
   if c > 0 then do
+    if booted = 1 & c_lib[c] = 1 then do
+      /* the program redefines a library class: start from a clean slate */
+      c_lib[c] = 0
+      m = c_meta[c]
+      do i = 1 to nsel
+        cm[c * 2048 + i] = 0
+        cm[m * 2048 + i] = 0
+      end
+      if sup > 0 then do
+        c_ivn[c] = c_ivn[sup]
+        c_ninst[c] = c_ninst[sup]
+      end
+      else do
+        c_ivn[c] = ""
+        c_ninst[c] = 0
+      end
+      gen = gen + 1
+    end
     if c_super[c] \= sup then do
       c_super[c] = sup
       if sup > 0 then do
