@@ -183,3 +183,228 @@ Object subclass: Matrix [
             i < rows ifTrue: [aStream nl]]
     ]
 ]
+
+Object subclass: LinkNode [
+    | value next prev |
+    value [ ^value ]
+    value: v [ value := v ]
+    next [ ^next ]
+    next: n [ next := n ]
+    prev [ ^prev ]
+    prev: p [ prev := p ]
+]
+
+Collection subclass: LinkedList [
+    | head tail count |
+    LinkedList class >> new [ ^self basicNew init ]
+    init [ count := 0 ]
+    size [ ^count ]
+    isEmpty [ ^count = 0 ]
+    add: x [ ^self addLast: x ]
+    addLast: x [
+        | n |
+        n := LinkNode new value: x; yourself.
+        tail isNil ifTrue: [head := n] ifFalse: [tail next: n. n prev: tail].
+        tail := n.
+        count := count + 1.
+        ^x
+    ]
+    addFirst: x [
+        | n |
+        n := LinkNode new value: x; yourself.
+        head isNil ifTrue: [tail := n] ifFalse: [head prev: n. n next: head].
+        head := n.
+        count := count + 1.
+        ^x
+    ]
+    first [ count = 0 ifTrue: [^self emptyCheck]. ^head value ]
+    last [ count = 0 ifTrue: [^self emptyCheck]. ^tail value ]
+    removeFirst [
+        | v |
+        count = 0 ifTrue: [^self emptyCheck].
+        v := head value.
+        head := head next.
+        head isNil ifTrue: [tail := nil] ifFalse: [head prev: nil].
+        count := count - 1.
+        ^v
+    ]
+    removeLast [
+        | v |
+        count = 0 ifTrue: [^self emptyCheck].
+        v := tail value.
+        tail := tail prev.
+        tail isNil ifTrue: [head := nil] ifFalse: [tail next: nil].
+        count := count - 1.
+        ^v
+    ]
+    remove: x ifAbsent: aBlock [
+        | n |
+        n := head.
+        [n notNil] whileTrue: [
+            n value = x ifTrue: [
+                n prev isNil ifTrue: [head := n next] ifFalse: [n prev next: n next].
+                n next isNil ifTrue: [tail := n prev] ifFalse: [n next prev: n prev].
+                count := count - 1.
+                ^x].
+            n := n next].
+        ^aBlock value
+    ]
+    do: aBlock [
+        | n |
+        n := head.
+        [n notNil] whileTrue: [aBlock value: n value. n := n next]
+    ]
+    reverseDo: aBlock [
+        | n |
+        n := tail.
+        [n notNil] whileTrue: [aBlock value: n value. n := n prev]
+    ]
+    reverse [ | r | r := LinkedList new. self do: [:e | r addFirst: e]. ^r ]
+    copyEmpty [ ^LinkedList new ]
+    asArray [ | r i | r := Array new: count. i := 0. self do: [:e | r at: (i := i + 1) put: e]. ^r ]
+    printOn: aStream [ aStream nextPutAll: 'LinkedList'; print: self asArray ]
+]
+
+Object subclass: Stopwatch [
+    | started elapsed |
+    Stopwatch class >> new [ ^self basicNew reset ]
+    Stopwatch class >> time: aBlock [ ^self new start; run: aBlock; stop; elapsed ]
+    reset [ elapsed := 0. started := nil ]
+    start [ started := Time millisecondClock ]
+    stop [ started notNil ifTrue: [elapsed := elapsed + (Time millisecondClock - started). started := nil] ]
+    run: aBlock [ aBlock value ]
+    elapsed [ ^started isNil ifTrue: [elapsed] ifFalse: [elapsed + (Time millisecondClock - started)] ]
+    isRunning [ ^started notNil ]
+    printOn: aStream [ aStream nextPutAll: 'Stopwatch('; print: self elapsed; nextPutAll: ' ms)' ]
+]
+
+String extend [
+    match: text [ ^self matchFrom: 1 text: text at: 1 ]
+    matchFrom: pi text: t at: ti [
+        | p |
+        p := pi.
+        [p <= self size] whileTrue: [
+            (self at: p) = $*
+                ifTrue: [
+                    p = self size ifTrue: [^true].
+                    ti to: t size + 1 do: [:k | (self matchFrom: p + 1 text: t at: k) ifTrue: [^true]].
+                    ^false]
+                ifFalse: [
+                    ti > t size ifTrue: [^false].
+                    ((self at: p) = $# or: [(self at: p) asLowercase = (t at: ti) asLowercase]) ifFalse: [^false]].
+            ^self matchFrom: p + 1 text: t at: ti + 1].
+        ^ti > t size
+    ]
+    fromJson [ ^(JsonParser on: self) parseValue ]
+]
+
+Object subclass: JsonParser [
+    | s |
+    JsonParser class >> on: str [ ^self basicNew setStream: (ReadStream on: str) ]
+    setStream: x [ s := x ]
+    skipWs [ [s atEnd not and: [s peek isSeparator]] whileTrue: [s next] ]
+    parseValue [
+        | c |
+        self skipWs.
+        s atEnd ifTrue: [^self error: 'unexpected end of JSON'].
+        c := s peek.
+        c = ${ ifTrue: [^self parseObject].
+        c = $[ ifTrue: [^self parseArray].
+        c = $" ifTrue: [^self parseString].
+        c = $t ifTrue: [self expect: 'true'. ^true].
+        c = $f ifTrue: [self expect: 'false'. ^false].
+        c = $n ifTrue: [self expect: 'null'. ^nil].
+        ^self parseNumber
+    ]
+    expect: w [ w do: [:ch | (s atEnd or: [s next ~= ch]) ifTrue: [^self error: 'bad JSON literal']] ]
+    parseNumber [
+        | ws |
+        ws := WriteStream on: String new.
+        [s atEnd not and: ['-+.eE0123456789' includes: s peek]] whileTrue: [ws nextPut: s next].
+        ws contents isEmpty ifTrue: [^self error: 'bad JSON value'].
+        ^ws contents asNumber
+    ]
+    parseString [
+        | ws c e |
+        s next.
+        ws := WriteStream on: String new.
+        [s atEnd ifTrue: [^self error: 'unterminated JSON string'].
+         c := s next.
+         c = $"] whileFalse: [
+            c = $\
+                ifTrue: [
+                    e := s next.
+                    e = $n ifTrue: [ws nextPut: (Character value: 10)] ifFalse: [
+                    e = $t ifTrue: [ws nextPut: (Character value: 9)] ifFalse: [
+                    e = $r ifTrue: [ws nextPut: (Character value: 13)] ifFalse: [
+                    ws nextPut: e]]]]
+                ifFalse: [ws nextPut: c]].
+        ^ws contents
+    ]
+    parseArray [
+        | r |
+        s next.
+        r := OrderedCollection new.
+        self skipWs.
+        s peek = $] ifTrue: [s next. ^r asArray].
+        [r add: self parseValue. self skipWs. s next = $,] whileTrue.
+        ^r asArray
+    ]
+    parseObject [
+        | d k |
+        s next.
+        d := Dictionary new.
+        self skipWs.
+        s peek = $} ifTrue: [s next. ^d].
+        [self skipWs. k := self parseString. self skipWs. s next.
+         d at: k put: self parseValue.
+         self skipWs.
+         s next = $,] whileTrue.
+        ^d
+    ]
+]
+
+Object extend [
+    asJson [ | ws | ws := WriteStream on: String new. self jsonOn: ws. ^ws contents ]
+    jsonOn: aStream [ aStream print: self displayString ]
+]
+UndefinedObject extend [ jsonOn: aStream [ aStream nextPutAll: 'null' ] ]
+Boolean extend [ jsonOn: aStream [ aStream nextPutAll: self printString ] ]
+Number extend [ jsonOn: aStream [ aStream nextPutAll: self printString ] ]
+Fraction extend [ jsonOn: aStream [ aStream nextPutAll: self asFloat printString ] ]
+String extend [
+    jsonOn: aStream [
+        aStream nextPut: $".
+        self do: [:c |
+            c = $" ifTrue: [aStream nextPutAll: '\"'] ifFalse: [
+            c = $\ ifTrue: [aStream nextPutAll: '\\'] ifFalse: [
+            c value = 10 ifTrue: [aStream nextPutAll: '\n'] ifFalse: [
+            c value = 13 ifTrue: [aStream nextPutAll: '\r'] ifFalse: [
+            c value = 9 ifTrue: [aStream nextPutAll: '\t'] ifFalse: [
+            aStream nextPut: c]]]]]].
+        aStream nextPut: $"
+    ]
+]
+Symbol extend [ jsonOn: aStream [ self asString jsonOn: aStream ] ]
+Collection extend [
+    jsonOn: aStream [
+        | first |
+        first := true.
+        aStream nextPut: $[.
+        self do: [:e | first ifFalse: [aStream nextPut: $,]. first := false. e jsonOn: aStream].
+        aStream nextPut: $]
+    ]
+]
+Dictionary extend [
+    jsonOn: aStream [
+        | first |
+        first := true.
+        aStream nextPut: ${.
+        (self keys asSortedCollection: [:a :b | a displayString <= b displayString]) do: [:k |
+            first ifFalse: [aStream nextPut: $,]. first := false.
+            k displayString jsonOn: aStream.
+            aStream nextPut: $:.
+            (self at: k) jsonOn: aStream].
+        aStream nextPut: $}
+    ]
+]

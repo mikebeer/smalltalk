@@ -1,0 +1,39 @@
+LinkedList(0 1 2 )
+3
+0
+2
+LinkedList(1 )
+OrderedCollection (2 10 12 )
+12
+LinkedList(6 5 1 )
+5
+LinkedList(1 6 )
+true
+Object: LinkedList() error: access beyond end of object
+LinkedList(Collection)>>emptyCheck
+LinkedList>>removeFirst
+UndefinedObject>>executeStatements
+true
+true
+true
+false
+true
+false
+true
+{"age":30,"name":"Ann \"A\"","none":null,"ok":true,"pi":3.5,"tags":["a","b"]}
+[1,2,'a']
+(1 2.5 'x
+y' true nil )
+-3
+{"a":[1,2.5,"x\ny",true,null],"b":{"c":-3}}
+()
+a Dictionary ()
+42
+'hi'
+Object: a JsonParser error: bad JSON literal
+JsonParser(Object)>>error:
+String>>do:
+JsonParser>>expect:
+JsonParser>>parseValue
+String>>fromJson
+UndefinedObject>>executeStatements
