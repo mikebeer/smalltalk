@@ -610,11 +610,20 @@ SortedCollection extend [
     sortBlock: aBlock [ sortBlock := aBlock. self resort ]
     resort [ self isEmpty ifFalse: [| a | a := self asArray mergeSort: sortBlock. self removeAll. a do: [:e | super add: e]] ]
     add: x [
-        | i |
-        i := self size.
-        [i >= 1 and: [(sortBlock value: (self at: i) value: x) not]] whileTrue: [i := i - 1].
-        super add: x beforeIndex: i + 1.
+        | lo hi mid |
+        lo := 1. hi := self size + 1.
+        [lo < hi] whileTrue: [
+            mid := lo + hi // 2.
+            (sortBlock value: (self at: mid) value: x) ifTrue: [lo := mid + 1] ifFalse: [hi := mid]].
+        super add: x beforeIndex: lo.
         ^x
+    ]
+    addAll: aColl [
+        | a |
+        a := (self asArray , aColl asArray) mergeSort: sortBlock.
+        self removeAll.
+        a do: [:e | super add: e].
+        ^aColl
     ]
     addFirst: x [ ^self shouldNotImplement ]
     addLast: x [ ^self shouldNotImplement ]

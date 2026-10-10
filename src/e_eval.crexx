@@ -142,7 +142,12 @@ invoke: procedure = .int
   end
   nt0 = m_ntemps[m]
   size = 4 + nt0
-  nf = alloc_frame(size)
+  nf = fl_head[size]
+  if nf > 0 then fl_head[size] = vp[nf]
+  else do
+    nf = nvp + 1
+    nvp = nvp + size
+  end
   vp[nf] = 0
   vp[nf + 1] = nf
   vp[nf + 2] = rcv
@@ -170,7 +175,10 @@ invoke: procedure = .int
   end
   else if unw = UW_NONE then r = rcv
   else r = 0
-  if m_hasblk[m] = 0 then call free_frame nf, size
+  if m_hasblk[m] = 0 then do
+    vp[nf] = fl_head[size]
+    fl_head[size] = nf
+  end
   else vp[nf + 1] = 0
   return r
 
@@ -192,7 +200,12 @@ call_block: procedure = .int
   end
   outer = o_slot[blk % 2]
   size = 4 + n_c[node]
-  bf = alloc_frame(size)
+  bf = fl_head[size]
+  if bf > 0 then fl_head[size] = vp[bf]
+  else do
+    bf = nvp + 1
+    nvp = nvp + size
+  end
   vp[bf] = outer
   vp[bf + 1] = vp[outer + 1]
   vp[bf + 2] = vp[outer + 2]
@@ -204,7 +217,10 @@ call_block: procedure = .int
     vp[bf + 3 + i] = nil_oop
   end
   r = ev(n_a[node], bf)
-  if n_d[node] = 0 then call free_frame bf, size
+  if n_d[node] = 0 then do
+    vp[bf] = fl_head[size]
+    fl_head[size] = bf
+  end
   if unw > 0 then return 0
   return r
 
@@ -217,6 +233,20 @@ block0: procedure = .int
    The evaluator
    --------------------------------------------------------------------- */
 ev: procedure = .int
+  arg n = .int, fb = .int
+  t = .int
+  t = nt[n]
+  if t = ND_SEND then return do_send(n, fb)
+  if t = ND_LIT then return n_a[n]
+  if t = ND_SELF then return vp[fb + 2]
+  if t = ND_LOCAL then do
+    if n_a[n] = 0 then return vp[fb + 4 + n_b[n]]
+  end
+  if t = ND_IVAR then return sl[o_slot[vp[fb + 2] % 2] + n_a[n]]
+  if t = ND_GVAR then return g_val[n_a[n]]
+  return ev_slow(n, fb)
+
+ev_slow: procedure = .int
   arg n = .int, fb = .int
   t = .int
   d = .int
@@ -269,7 +299,7 @@ ev: procedure = .int
       v = nil_oop
       f = n_a[n]
       do i = f to f + n_b[n] - 1
-        v = ev(al[i], fb)
+        EV v = al[i]
         if unw > 0 then return 0
       end
       return v
@@ -289,7 +319,7 @@ ev: procedure = .int
       return 0
     end
     when t = ND_IF then do
-      v = ev(n_a[n], fb)
+      EV v = n_a[n]
       if unw > 0 then return 0
       if v = true_oop then do
         if n_b[n] > 0 then return ev(n_b[n], fb)
@@ -405,12 +435,12 @@ do_todo: procedure = .int
   v = .int
   r = .int
   base = .int
-  a = ev(n_a[n], fb)
+  EV a = n_a[n]
   if unw > 0 then return 0
-  b = ev(n_b[n], fb)
+  EV b = n_b[n]
   if unw > 0 then return 0
   if n_d[n] > 0 then do
-    st = ev(n_d[n], fb)
+    EV st = n_d[n]
     if unw > 0 then return 0
   end
   else st = mkint(1)
@@ -529,14 +559,14 @@ do_send: procedure = .int
     if c = 0 then c = cls_Object
   end
   else do
-    rcv = ev(rn, fb)
+    EV rcv = rn
     if unw > 0 then return 0
     c = 0
   end
   base = asp
   f = n_b[n]
   do i = 0 to na - 1
-    v = ev(al[f + i], fb)
+    EV v = al[f + i]
     if unw > 0 then do
       asp = base
       return 0

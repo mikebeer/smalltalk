@@ -1,0 +1,11 @@
+# container type : names   (parallel arrays packed into one strided array)
+px_node int : nt n_a n_b n_c n_d n_i
+px_obj int : o_cls o_kind o_n o_slot o_x
+px_cls int : c_super c_meta c_ismeta c_this c_kind c_ninst c_lib c_oop
+px_meth int : m_sel m_cls m_nargs m_body m_ntemps m_hasblk m_prim m_src
+px_mk int : mk_tp mk_t mk_i mk_p mk_h mk_pt mk_pi mk_pp
+px_env int : env_slot env_lvl sc_next sc_max sc_blk
+px_dd int : dd_head dd_tail dd_n de_key de_val de_next de_live
+px_h int : cs_m cs_r h_cls h_blk h_id
+px_str string : mk_s mk_ps nl_name env_name c_name c_ivn g_name sel_name
+px_fl float : mk_f mk_pf
