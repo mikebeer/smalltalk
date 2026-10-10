@@ -8,6 +8,7 @@
 options levelb numeric_classic
 import rxfnsb
 import rxfloat
+import rxfs
 import _rxsysb
 @@EXPOSE@@
 
@@ -25,8 +26,15 @@ do while ia <= av.0
     libdir = av[ia]
   end
   else if oa == "-h" | oa == "--help" then do
-    say "usage: smalltalk [-L libdir] [file.st ...]"
+    say "usage: smalltalk [-L libdir] [-i] [file.st ...] [-- arg ...]"
     exit 0
+  end
+  else if oa == "-i" then repl_mode = 1
+  else if oa == "--" then do
+    do ia = ia + 1 to av.0
+      nsargs = nsargs + 1
+      sargs[nsargs] = av[ia]
+    end
   end
   else do
     nfiles = nfiles + 1
@@ -35,7 +43,7 @@ do while ia <= av.0
   ia = ia + 1
 end
 call boot
-libs = "kernel.st numbers.st collections.st streams.st exceptions.st extras.st structures.st regex.st"
+libs = "kernel.st numbers.st collections.st streams.st exceptions.st extras.st structures.st regex.st system.st"
 do ia = 1 to words(libs)
   lf = libdir || "/" || word(libs, ia)
   ltxt = read_file(lf)
@@ -47,7 +55,7 @@ do ia = 1 to words(libs)
 end
 cls_Message = find_class("Message")
 booted = 1
-if nfiles = 0 then do
+if nfiles = 0 & repl_mode = 0 then do
   do forever
     ul = read_stdin_line()
     if ul = 0 then leave
@@ -66,6 +74,7 @@ else do
     if halted = 1 then leave
   end
 end
+if repl_mode = 1 & halted = 0 then call repl_loop
 call flush_out
 exit rc_exit
 
@@ -99,6 +108,12 @@ init: procedure = .void
   h_in = _open("stdin", "r")
   stdin_eof = 0
   rnd_state = 12345
+  repl_mode = 0
+  repl_echo = 0
+  nsargs = 0
+  sargs = .string[]
+  sys_rc = 0
+  sys_err = ""
   prim_names = "@@PRIMNAMES@@"
   selboot = "@@SELBOOT@@"
   /* ---- lexer / parser ---- */

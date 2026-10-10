@@ -9,7 +9,7 @@ LinkedList(6 5 1 )
 5
 LinkedList(1 6 )
 true
-Object: LinkedList() error: access beyond end of object
+Object: LinkedList() error: tried to access an empty collection
 LinkedList(Collection)>>emptyCheck
 LinkedList>>removeFirst
 UndefinedObject>>executeStatements

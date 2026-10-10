@@ -101,6 +101,7 @@ NotFound class extend [
 ]
 EmptyCollection class extend [
     signalOn: coll [ ^self new receiver: coll; signal: 'access beyond end of object' ]
+    signalEmpty: coll [ ^self new receiver: coll; signal: 'tried to access an empty collection' ]
 ]
 WrongClass class extend [
     signalOn: value reason: msg [ ^self new receiver: value; signal: msg ]

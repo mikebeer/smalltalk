@@ -40,7 +40,12 @@ Collection extend [
     conform: aBlock [ ^self allSatisfy: aBlock ]
     noneSatisfy: aBlock [ ^(self anySatisfy: aBlock) not ]
     anyOne [ self do: [:e | ^e]. ^self emptyCheck ]
-    emptyCheck [ ^SystemExceptions.EmptyCollection signalOn: self ]
+    emptyCheck [ ^SystemExceptions.EmptyCollection signalEmpty: self ]
+    orderedForPrinting [ ^self ]
+    sortedIfPossible: anArray [
+        (anArray allSatisfy: [:e | (e isKindOf: Magnitude) or: [e isString]]) ifFalse: [^anArray].
+        ^[(anArray asSortedCollection: [:x :y | x <= y]) asArray] on: Error do: [:ex | anArray]
+    ]
     inject: acc into: aBlock [ | r | r := acc. self do: [:e | r := aBlock value: r value: e]. ^r ]
     fold: aBlock [
         | r first |
@@ -87,14 +92,14 @@ Collection extend [
     readStream [ ^ReadStream on: self asArray ]
     printOn: aStream [
         aStream nextPutAll: self class storeString, ' ('.
-        self do: [:e | aStream print: e; space].
+        self orderedForPrinting do: [:e | aStream print: e; space].
         aStream nextPut: $)
     ]
     displayString [
         | s |
         s := WriteStream on: String new.
         s nextPutAll: self class storeString, ' ('.
-        self do: [:e | s nextPutAll: e displayString; space].
+        self orderedForPrinting do: [:e | s nextPutAll: e displayString; space].
         s nextPut: $).
         ^s contents
     ]
@@ -463,6 +468,7 @@ OrderedCollection class extend [
 ]
 
 OrderedCollection extend [
+    emptyCheck [ ^SystemExceptions.EmptyCollection signalOn: self ]
     | arr first last |
     setUp: n [ arr := Array new: n. first := n // 2 max: 1. last := first - 1 ]
     size [ ^last - first + 1 ]
@@ -685,6 +691,7 @@ Dictionary class extend [
 ]
 
 Dictionary extend [
+    orderedForPrinting [ ^self sortedIfPossible: self keys asArray ]
     isDictionary [ ^true ]
     primAt: k [ <primitive: dictAt> ^SystemExceptions.NotFound signalOn: k what: 'key' reason: 'key not found' ]
     primHas: k [ <primitive: dictHas> ]
@@ -752,20 +759,21 @@ Dictionary extend [
     hash [ ^self size ]
     printOn: aStream [
         aStream nextPutAll: self class article, ' ', self class name, ' ('.
-        self keysAndValuesDo: [:k :v | aStream print: k; nextPutAll: '->'; print: v; space].
+        self orderedForPrinting do: [:k | aStream print: k; nextPutAll: '->'; print: (self at: k); space].
         aStream nextPut: $)
     ]
     displayString [
         | s |
         s := WriteStream on: String new.
         s nextPutAll: self class article, ' ', self class name, ' ('.
-        self keysAndValuesDo: [:k :v | s nextPutAll: k displayString; nextPutAll: '->'; nextPutAll: v displayString; space].
+        self orderedForPrinting do: [:k | s nextPutAll: k displayString; nextPutAll: '->'; nextPutAll: (self at: k) displayString; space].
         s nextPut: $).
         ^s contents
     ]
 ]
 
 Set extend [
+    orderedForPrinting [ ^self sortedIfPossible: self asArray ]
     primPut: k with: v [ <primitive: dictAtPut> ]
     add: x [ self primPut: x with: x. ^x ]
     includes: x [ <primitive: dictHas> ]
@@ -802,6 +810,7 @@ Bag class extend [
 
 Bag extend [
     | counts |
+    orderedForPrinting [ ^self sortedIfPossible: self asArray ]
     setUp [ counts := Dictionary new ]
     add: x [ ^self add: x withOccurrences: 1 ]
     add: x withOccurrences: n [ counts at: x put: (counts at: x ifAbsent: [0]) + n. ^x ]

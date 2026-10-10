@@ -20,14 +20,28 @@ tofloat: procedure = .float
 float_int: procedure = .int
   arg f = .float
   if f \= f then return 0
+  if f > 1.0e308 | f < -1.0e308 then return 0
   if f > -900000000000000000.0 & f < 900000000000000000.0 then return mkint(rxfloat..trunc(f) as .int)
   return big_norm(float_to_istr(f))
+
+f_inf: procedure = .float
+  z = .float
+  z = 1.0e308
+  z = z * 10.0
+  return z
+
+f_nan: procedure = .float
+  z = .float
+  z = f_inf()
+  return z - z
 
 float_str: procedure = .string
   arg f = .float
   s = .string
   p = .int
   if f \= f then return "nan"
+  if f > 1.0e308 then return "inf"
+  if f < -1.0e308 then return "-inf"
   s = f as .string
   p = pos("e", s)
   if p = 0 then do
@@ -470,7 +484,7 @@ prim_a: procedure = .int
       x = tofloat(rcv)
       select
         when k = 1 then do
-          if x < 0.0 then return 0
+          if x < 0.0 then return mkfloat(f_nan())
           return mkfloat(rxfloat..sqrt(x))
         end
         when k = 2 then return mkfloat(rxfloat..sin(x))
@@ -478,12 +492,14 @@ prim_a: procedure = .int
         when k = 4 then return mkfloat(rxfloat..tan(x))
         when k = 5 then return mkfloat(rxfloat..atan(x))
         when k = 6 then do
-          if x <= 0.0 then return 0
+          if x < 0.0 then return mkfloat(f_nan())
+          if x = 0.0 then return mkfloat(0.0 - f_inf())
           return mkfloat(rxfloat..log(x))
         end
         when k = 7 then return mkfloat(rxfloat..exp(x))
         when k = 8 then do
-          if x <= 0.0 then return 0
+          if x < 0.0 then return mkfloat(f_nan())
+          if x = 0.0 then return mkfloat(0.0 - f_inf())
           return mkfloat(rxfloat..log10(x))
         end
         when k = 9 then return mkfloat(rxfloat..asin(x))
@@ -1305,8 +1321,9 @@ prim_c: procedure = .int
     end
     when p = PR_STDINATEND then return mkbool(stdin_eof = 1)
     when p = PR_MSECS then do
-      s = time("E")
-      return mkint(rxfloat..trunc((s as .float) * 1000.0) as .int)
+      bdays = date("B") as .int
+      usecs = time("US") as .int
+      return mkint((bdays - 719162) * 86400000 + usecs % 1000)
     end
     when p = PR_SECS then return mkint(0)
     when p = PR_HALT then do
@@ -1348,6 +1365,64 @@ prim_c: procedure = .int
       end
       return mkfloat(rnd_state as .float / 2147483648.0)
     end
+    when p = PR_ARGCOUNT then return mkint(nsargs)
+    when p = PR_ARGAT then do
+      if a1 // 2 = 0 then return 0
+      ak = intval(a1)
+      if ak < 1 | ak > nsargs then return 0
+      return mkstr(sargs[ak])
+    end
+    when p = PR_FDELETE then do
+      if isstr(a1) = 0 then return 0
+      return mkbool(rxfs..delete(o_s[a1 % 2]) = 0)
+    end
+    when p = PR_FRENAME then do
+      if isstr(a1) = 0 | isstr(a2) = 0 then return 0
+      return mkbool(rxfs..rename(o_s[a1 % 2], o_s[a2 % 2]) = 0)
+    end
+    when p = PR_FCOPY then do
+      if isstr(a1) = 0 | isstr(a2) = 0 then return 0
+      return mkbool(rxfs..copy(o_s[a1 % 2], o_s[a2 % 2]) = 0)
+    end
+    when p = PR_FKIND then do
+      if isstr(a1) = 0 then return 0
+      return mkint(rxfs..pathkind(o_s[a1 % 2]))
+    end
+    when p = PR_FMKDIR then do
+      if isstr(a1) = 0 then return 0
+      return mkbool(rxfs..mkdir(o_s[a1 % 2]) = 0)
+    end
+    when p = PR_FRMDIR then do
+      if isstr(a1) = 0 then return 0
+      return mkbool(rxfs..rmdir(o_s[a1 % 2]) = 0)
+    end
+    when p = PR_FCWD then return mkstr(rxfs..cwd())
+    when p = PR_FCHDIR then do
+      if isstr(a1) = 0 then return 0
+      return mkbool(rxfs..chdir(o_s[a1 % 2]) = 0)
+    end
+    when p = PR_FSIZE then do
+      if isstr(a1) = 0 then return 0
+      if file_ok(o_s[a1 % 2]) = 0 then return nil_oop
+      return mkint(file_bytes(o_s[a1 % 2]))
+    end
+    when p = PR_FLIST then do
+      if isstr(a1) = 0 then return 0
+      ents = .string[]
+      cnt = rxfs..listdir(o_s[a1 % 2], ents)
+      if cnt < 0 then return nil_oop
+      r = mkarray(cnt)
+      do j = 1 to cnt
+        sl[o_slot[r % 2] + j - 1] = mkstr(ents[j])
+      end
+      return r
+    end
+    when p = PR_SYSCMD then do
+      if isstr(a1) = 0 then return 0
+      return mkstr(run_command(o_s[a1 % 2]))
+    end
+    when p = PR_SYSRC then return mkint(sys_rc)
+    when p = PR_SYSERR then return mkstr(sys_err)
     when p = PR_RANDSEED then do
       if a1 // 2 = 0 then return 0
       rnd_state = intval(a1)
@@ -1361,7 +1436,7 @@ prim_c: procedure = .int
     when p = PR_FILEREAD then do
       if isstr(a1) = 0 then return 0
       if file_ok(o_s[a1 % 2]) = 0 then return nil_oop
-      return mkstr(read_file(o_s[a1 % 2]))
+      return mkstr(read_file_exact(o_s[a1 % 2]))
     end
     when p = PR_FILEWRITE then do
       /* fileWrite: path text: string append: boolean */
@@ -1505,3 +1580,54 @@ file_write: procedure = .int
   assembler fwrite fid, txt2
   assembler fclose rcx, fid
   return 1
+
+/* run a shell command; answers its standard output, sets sys_rc and sys_err */
+run_command: procedure = .string
+  arg cmd = .string
+  outl = .string[]
+  errl = .string[]
+  res = .string
+  i = .int
+  res = ""
+  address command cmd output outl error errl
+  sys_rc = rc
+  do i = 1 to outl.0
+    if i > 1 then res = res || '0a'x
+    res = res || outl[i]
+  end
+  sys_err = ""
+  do i = 1 to errl.0
+    if i > 1 then sys_err = sys_err || '0a'x
+    sys_err = sys_err || errl[i]
+  end
+  return res
+
+/* size of a file in bytes */
+file_bytes: procedure = .int
+  arg fn = .string
+  b = .binary
+  n = .int
+  b = readbinary(fn)
+  n = 0
+  assembler blen n, b
+  return n
+
+/* the text of a file without the newline that read_file adds to an unterminated last line */
+read_file_exact: procedure = .string
+  arg fn = .string
+  t = .string
+  b = .binary
+  n = .int
+  lb = .int
+  off = .int
+  t = read_file(fn)
+  if t == "" then return ""
+  b = readbinary(fn)
+  n = 0
+  assembler blen n, b
+  if n = 0 then return ""
+  off = n - 1
+  lb = 0
+  assembler getbyte lb, b, off
+  if lb \= 10 then t = left(t, length(t) - 1)
+  return t

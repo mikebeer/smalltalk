@@ -1,0 +1,17 @@
+CREXX Smalltalk - type exit to leave
+st> 7
+st> st> 10
+st> 20
+st> (1 4 9 )
+st> hi
+st> ... ... st> 42
+st> Object: 1 error: The program attempted to divide a number by zero
+SmallInteger(Number)>>zeroDivide
+SmallInteger(Number)>>/
+UndefinedObject>>executeStatements
+st> Object: a Foo error: did not understand #zork
+Foo(Object)>>doesNotUnderstand:
+UndefinedObject>>executeStatements
+st> (3 2 1 )
+st> Set (1 2 3 )
+st> 

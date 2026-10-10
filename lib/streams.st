@@ -134,6 +134,27 @@ ReadWriteStream extend [
     reset [ pos := 0 ]
     position [ ^pos ]
     position: n [ pos := n ]
+    notAtEnd [ ^pos < acc size ]
+    next: n [
+        | r |
+        pos + n > acc size ifTrue: [^SystemExceptions.EndOfStream signalOn: self].
+        r := acc copyFrom: pos + 1 to: pos + n.
+        pos := pos + n.
+        ^r
+    ]
+    upTo: x [
+        | i r |
+        i := pos + 1.
+        [i <= acc size and: [(acc at: i) ~= x]] whileTrue: [i := i + 1].
+        r := acc copyFrom: pos + 1 to: i - 1.
+        pos := i min: acc size.
+        ^r
+    ]
+    skip: n [ pos := ((pos + n) max: 0) min: acc size ]
+    peekFor: x [ (self atEnd not and: [self peek = x]) ifTrue: [pos := pos + 1. ^true]. ^false ]
+    skipSeparators [ [self atEnd not and: [self peek isSeparator]] whileTrue: [pos := pos + 1] ]
+    setToEnd [ pos := acc size ]
+    nextLine [ ^self upTo: Character nl ]
 ]
 
 ReadWriteStream class extend [

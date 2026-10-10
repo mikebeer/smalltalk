@@ -1,6 +1,7 @@
 #!/bin/sh
 # Regression tests: for every tests/NAME.st run the interpreter and compare
-# stdout+stderr with tests/NAME.out.  Optional file NAME.in is fed to stdin.
+# stdout+stderr with tests/NAME.out.  Optional file NAME.in is fed to stdin and
+# NAME.flags holds extra command-line options (for example -i).
 # "run_tests.sh --update" rewrites the expected output files.
 DIR=$(cd "$(dirname "$0")" && pwd)
 ST="$DIR/../smalltalk"
@@ -8,7 +9,8 @@ pass=0; fail=0
 for src in "$DIR"/*.st; do
   name=$(basename "$src" .st)
   input=/dev/null; [ -f "$DIR/$name.in" ] && input="$DIR/$name.in"
-  actual=$("$ST" "$src" < "$input" 2>&1)
+  flags=""; [ -f "$DIR/$name.flags" ] && flags=$(cat "$DIR/$name.flags")
+  actual=$("$ST" $flags "$src" < "$input" 2>&1)
   if [ "$1" = "--update" ]; then
     printf '%s\n' "$actual" > "$DIR/$name.out"; echo "updated $name"; continue
   fi

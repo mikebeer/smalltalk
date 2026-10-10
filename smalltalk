@@ -1,6 +1,8 @@
 #!/bin/sh
 # Launcher for the CREXX Smalltalk interpreter.
 #   ./smalltalk [file.st ...]       run files (or standard input)
+#   ./smalltalk -i [file.st ...]    run files, then an interactive prompt
+#   ./smalltalk file.st -- a b      arguments after -- are in Smalltalk arguments
 # The interpreter is compiled to bytecode on first use (about a minute),
 # afterwards it starts quickly.  Set CREXX to the crexx driver if it is not on your PATH.
 DIR=$(cd "$(dirname "$0")" && pwd)

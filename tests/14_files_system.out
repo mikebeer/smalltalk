@@ -1,0 +1,103 @@
+nan
+true
+inf
+-inf
+nan
+true
+false
+-inf
+true
+Object: inf error: cannot truncate this number
+FloatD(Object)>>error:
+FloatD(Float)>>truncated
+UndefinedObject>>executeStatements
+Set (1 3 5 9 )
+Bag (1 2 3 3 )
+a Dictionary (#a->1 #b->2 #c->3 )
+Set (apple fig pear )
+3
+Object: LinkedList() error: tried to access an empty collection
+LinkedList(Collection)>>emptyCheck
+LinkedList>>first
+UndefinedObject>>executeStatements
+Object: () error: tried to access an empty collection
+Array(Collection)>>emptyCheck
+Array(SequenceableCollection)>>first
+UndefinedObject>>executeStatements
+Object: OrderedCollection () error: access beyond end of object
+OrderedCollection>>removeFirst
+UndefinedObject>>executeStatements
+true
+true
+true
+true
+5
+3
+true
+('a.txt' 'b.txt' 'sub' )
+('a.txt' 'b.txt' )
+('sub' )
+5
+true
+true
+false
+'hello'
+true
+false
+true
+Object: '/tmp/nope_dir' error: could not read directory /tmp/nope_dir
+Directory class>>entries:
+UndefinedObject>>executeStatements
+'hi
+there'
+0
+run
+0
+3
+true
+true
+true
+true
+false
+(('a' 'b' 'c' ) ('1' 'x, y' '3' ) ('he said "hi"' '' 'z' ) )
+(('a' 'b' ) ('1' '2' ) )
+(a Dictionary ('age'->'30' 'name'->'Ann' ) a Dictionary ('age'->'25' 'name'->'Bob' ) )
+a,b c
+"x,y","say ""hi"""
+1,2.5,nil
+
+8
+(('1' '2' ) ('3' '4' ) )
+true
+Object: '/tmp/none.csv' error: could not open file /tmp/none.csv
+FileStream class>>contentsOf:ifAbsent:
+CSV class>>parseFile:
+UndefinedObject>>executeStatements
+(('x' 'y' ) ('1' '2' ) )
+()
+nan
+inf
+done
+0
+5
+'hello'
+5
+4
+'a
+b
+'
+('a' 'b' )
+0
+''
+0
+'hello'
+' world'
+'abc'
+'a1csym2.5nil
+'
+'0000FF'
+'005'
+'101'
+13
+'abcdef'
+'bcd'

@@ -7,6 +7,8 @@ GNU Smalltalk bracket syntax.
 ```
 ./smalltalk examples/hello.st
 echo "(3/4 + 0.25) printNl." | ./smalltalk
+./smalltalk -i                              # interactive prompt
+./smalltalk report.st -- 2026 north      # program arguments
 ```
 
 The launcher compiles the interpreter to bytecode on first use (about half a minute) and runs
@@ -26,6 +28,7 @@ it afterwards. Set `CREXX` to the `crexx` driver if it is not on your `PATH`.
 * **Collections**: Array, OrderedCollection, SortedCollection, Interval, Set, Bag, Dictionary,
   Association, String, Symbol, with the usual `do:`/`collect:`/`select:`/`inject:into:` protocol.
 * **Data structures**: Complex numbers, Stack, Queue, Matrix, LinkedList, Stopwatch, wildcard `match:`, JSON (`asJson`, `fromJson`), regular expressions (`matchesRegex:`, `allRegexMatches:`, `copyReplacingRegex:with:`), date parsing and formatting, `Smalltalk getenv:`, `Random seed:`; number formatting (`printShowingDecimalPlaces:`, `asStringWithCommas`).
+* **Files and system**: `FileStream` (`delete:`, `rename:to:`, `copy:to:`, `size:`), `Directory` (`entries:`, `create:`, `remove:`), `Smalltalk system:` / `systemOutput:`, `Smalltalk arguments`, CSV (`CSV parse:`, `CSV format:`).
 * **Streams**: ReadStream, WriteStream, ReadWriteStream, FileStream (`read:`, `write:`, `append:`, `exists:`); **Date** and **Time** (`today`, `now`, **DateTime**, calendar arithmetic); `Transcript` (`show:`, `showCr:`, `display:`,
   `print:`, `cr`, `tab`...).
 * **Exceptions**: `on:do:`, `ensure:`, `ifCurtailed:`, `signal`, `signal:`, `retry`, `return:`,
