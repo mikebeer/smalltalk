@@ -52,7 +52,7 @@ it afterwards. Set `CREXX` to the `crexx` driver if it is not on your `PATH`.
 | --- | --- |
 | `src/*.crexx` | interpreter sources (lexer/parser, resolver, evaluator, primitives, big integers) |
 | `build.py` | concatenates `src/` into `smalltalk.crexx` and substitutes constants |
-| `lib/*.st` | class library written in Smalltalk (kernel, numbers, collections, streams, exceptions) |
+| `lib/*.st` | class library written in Smalltalk (kernel, numbers, collections, streams, exceptions, extras) |
 | `examples/` | sample programs |
 | `tests/` | regression tests (`tests/run_tests.sh`) |
 | `docs/` | user manual (docx and PDF) |
