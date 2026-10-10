@@ -423,9 +423,46 @@ Date class extend [
         ^self new setYear: (s copyFrom: 1 to: 4) asNumber month: (s copyFrom: 5 to: 6) asNumber day: (s copyFrom: 7 to: 8) asNumber
     ]
     year: y month: m day: d [ ^self new setYear: y month: m day: d ]
+    fromDays: n [
+        | z era doe yoe y doy mp d m |
+        z := n + 719468.
+        era := z // 146097.
+        doe := z - (era * 146097).
+        yoe := (doe - (doe // 1460) + (doe // 36524) - (doe // 146096)) // 365.
+        y := yoe + (era * 400).
+        doy := doe - ((365 * yoe) + (yoe // 4) - (yoe // 100)).
+        mp := ((5 * doy) + 2) // 153.
+        d := doy - (((153 * mp) + 2) // 5) + 1.
+        m := mp < 10 ifTrue: [mp + 3] ifFalse: [mp - 9].
+        m <= 2 ifTrue: [y := y + 1].
+        ^self year: y month: m day: d
+    ]
+    isLeapYear: y [ ^(y \\ 4 = 0 and: [y \\ 100 ~= 0]) or: [y \\ 400 = 0] ]
+    daysInMonth: m year: y [
+        m = 2 ifTrue: [^(self isLeapYear: y) ifTrue: [29] ifFalse: [28]].
+        ^(#(31 28 31 30 31 30 31 31 30 31 30 31) at: m)
+    ]
 ]
 Date extend [
     | year month day |
+    asDays [
+        | y era yoe doy doe |
+        y := month <= 2 ifTrue: [year - 1] ifFalse: [year].
+        era := y // 400.
+        yoe := y - (era * 400).
+        doy := (((153 * (month > 2 ifTrue: [month - 3] ifFalse: [month + 9])) + 2) // 5) + day - 1.
+        doe := (yoe * 365) + (yoe // 4) - (yoe // 100) + doy.
+        ^(era * 146097) + doe - 719468
+    ]
+    addDays: n [ ^Date fromDays: self asDays + n ]
+    subtractDate: other [ ^self asDays - other asDays ]
+    daysFrom: other [ ^self asDays - other asDays ]
+    dayOfWeek [ ^((self asDays + 3) \\ 7) + 1 ]
+    dayName [ ^#(#Monday #Tuesday #Wednesday #Thursday #Friday #Saturday #Sunday) at: self dayOfWeek ]
+    monthName [ ^#(#January #February #March #April #May #June #July #August #September #October #November #December) at: month ]
+    isLeapYear [ ^Date isLeapYear: year ]
+    daysInMonth [ ^Date daysInMonth: month year: year ]
+
     setYear: y month: m day: d [ year := y. month := m. day := d ]
     year [ ^year ]
     month [ ^month ]
@@ -449,6 +486,7 @@ Time class extend [
         ^self new setHours: (s copyFrom: 1 to: 2) asNumber minutes: (s copyFrom: 4 to: 5) asNumber seconds: (s copyFrom: 7 to: 8) asNumber
     ]
     hours: h minutes: m seconds: s [ ^self new setHours: h minutes: m seconds: s ]
+    fromSeconds: n [ | t | t := n \\ 86400. ^self hours: t // 3600 minutes: t \\ 3600 // 60 seconds: t \\ 60 ]
 ]
 Time extend [
     | hours minutes seconds |
@@ -457,6 +495,8 @@ Time extend [
     minutes [ ^minutes ]
     seconds [ ^seconds ]
     asSeconds [ ^hours * 3600 + (minutes * 60) + seconds ]
+    addSeconds: n [ ^Time fromSeconds: self asSeconds + n ]
+    subtractTime: other [ ^self asSeconds - other asSeconds ]
     < other [ ^self asSeconds < other asSeconds ]
     = other [ ^(other isKindOf: Time) and: [self asSeconds = other asSeconds] ]
     hash [ ^self asSeconds ]
