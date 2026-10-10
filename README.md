@@ -25,7 +25,7 @@ it afterwards. Set `CREXX` to the `crexx` driver if it is not on your `PATH`.
   with coercion, radix literals (`16r1F`), `\\ // rem: quo: gcd: factorial raisedTo:` and more.
 * **Collections**: Array, OrderedCollection, SortedCollection, Interval, Set, Bag, Dictionary,
   Association, String, Symbol, with the usual `do:`/`collect:`/`select:`/`inject:into:` protocol.
-* **Streams**: ReadStream, WriteStream, ReadWriteStream, FileStream (`read:`, `write:`, `append:`, `exists:`); **Date** and **Time** (`today`, `now`, day and second arithmetic); `Transcript` (`show:`, `showCr:`, `display:`,
+* **Streams**: ReadStream, WriteStream, ReadWriteStream, FileStream (`read:`, `write:`, `append:`, `exists:`); **Date** and **Time** (`today`, `now`, **DateTime**, calendar arithmetic); `Transcript` (`show:`, `showCr:`, `display:`,
   `print:`, `cr`, `tab`...).
 * **Exceptions**: `on:do:`, `ensure:`, `ifCurtailed:`, `signal`, `signal:`, `retry`, `return:`,
   `resume:`, `pass`, `outer`, `retryUsing:`, exception sets (`ZeroDivide, Error`), user-defined

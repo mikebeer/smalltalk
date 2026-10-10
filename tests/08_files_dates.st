@@ -1,4 +1,4 @@
-| f d |
+| f d a |
 f := FileStream write: '/tmp/st_test_out.txt'.
 f nextPutAll: 'line one'; nl; nextPutAll: 'line two'; nl.
 f close.
@@ -23,3 +23,14 @@ d isLeapYear printNl.
 d monthName printNl.
 ((Time hours: 23 minutes: 59 seconds: 30) addSeconds: 45) printNl.
 ((Time hours: 10 minutes: 0 seconds: 0) subtractTime: (Time hours: 9 minutes: 30 seconds: 0)) printNl.
+a := DateTime year: 2026 month: 12 day: 31 hour: 23 minute: 59 second: 0.
+(a addSeconds: 120) printNl.
+(a addDays: 1) printNl.
+((a addSeconds: 3600) subtractDateTime: a) printNl.
+(a < (a addSeconds: 1)) printNl.
+(a max: (a addSeconds: 5)) printNl.
+(Date year: 2026 month: 10 day: 10) longPrintString displayNl.
+(Date year: 2026 month: 10 day: 10) dayOfYear printNl.
+(Date year: 2026 month: 10 day: 10) isWeekend printNl.
+((Date year: 2026 month: 1 day: 31) addMonths: 1) printNl.
+((Date year: 2026 month: 11 day: 30) addMonths: 3) printNl.

@@ -506,3 +506,52 @@ Time extend [
             nextPutAll: (seconds printPaddedWith: $0 to: 2)
     ]
 ]
+
+Date extend [
+    longPrintString [
+        ^self dayName asString, ', ', day printString, ' ', self monthName asString, ' ', year printString
+    ]
+    shortMonthName [ ^self monthName asString copyFrom: 1 to: 3 ]
+    dayOfYear [ ^self asDays - (Date year: year month: 1 day: 1) asDays + 1 ]
+    isWeekend [ ^self dayOfWeek > 5 ]
+    addMonths: n [
+        | m y d |
+        m := month - 1 + n.
+        y := year + (m // 12).
+        m := m \\ 12 + 1.
+        d := day min: (Date daysInMonth: m year: y).
+        ^Date year: y month: m day: d
+    ]
+    asDate [ ^self ]
+]
+
+Magnitude subclass: DateTime [
+    | date time |
+    DateTime class >> now [ ^self date: Date today time: Time now ]
+    DateTime class >> date: d time: t [ ^self new setDate: d time: t ]
+    DateTime class >> year: y month: m day: d hour: h minute: mi second: s [
+        ^self date: (Date year: y month: m day: d) time: (Time hours: h minutes: mi seconds: s)
+    ]
+    DateTime class >> fromSeconds: n [
+        ^self date: (Date fromDays: n // 86400) time: (Time fromSeconds: n \\ 86400)
+    ]
+    setDate: d time: t [ date := d. time := t ]
+    date [ ^date ]
+    time [ ^time ]
+    year [ ^date year ]
+    month [ ^date month ]
+    day [ ^date day ]
+    hours [ ^time hours ]
+    minutes [ ^time minutes ]
+    seconds [ ^time seconds ]
+    asSeconds [ ^date asDays * 86400 + time asSeconds ]
+    addSeconds: n [ ^DateTime fromSeconds: self asSeconds + n ]
+    addDays: n [ ^DateTime date: (date addDays: n) time: time ]
+    subtractDateTime: other [ ^self asSeconds - other asSeconds ]
+    < other [ ^self asSeconds < other asSeconds ]
+    = other [ ^(other isKindOf: DateTime) and: [self asSeconds = other asSeconds] ]
+    hash [ ^self asSeconds ]
+    printOn: aStream [
+        aStream print: date; nextPut: $T; print: time
+    ]
+]
