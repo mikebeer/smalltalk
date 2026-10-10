@@ -408,7 +408,7 @@ ev_slow: procedure = .int
       end
       return v
     end
-    when t = ND_THISCTX then return nil_oop
+    when t = ND_THISCTX then return make_context()
     otherwise nop
   end
   return nil_oop
@@ -667,3 +667,33 @@ do_send: procedure = .int
   else r = invoke(m, rcv, base, na)
   asp = base
   return r
+
+/* thisContext: a chain of Context objects built from the call stack */
+make_context: procedure = .int
+  cc = .int
+  i = .int
+  o = .int
+  prev = .int
+  s0 = .int
+  cc = find_class("Context")
+  if cc = 0 then return nil_oop
+  prev = nil_oop
+  do i = 1 to cdepth
+    o = new_instance(cc, 0)
+    s0 = o_slot[o % 2]
+    sl[s0] = cs_r[i]
+    sl[s0 + 1] = mksym(sel_name[m_sel[cs_m[i]]])
+    sl[s0 + 2] = c_oop[m_cls[cs_m[i]]]
+    sl[s0 + 3] = prev
+    prev = o
+  end
+  if prev = nil_oop then do
+    o = new_instance(cc, 0)
+    s0 = o_slot[o % 2]
+    sl[s0] = nil_oop
+    sl[s0 + 1] = mksym("executeStatements")
+    sl[s0 + 2] = nil_oop
+    sl[s0 + 3] = nil_oop
+    prev = o
+  end
+  return prev

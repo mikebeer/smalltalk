@@ -149,3 +149,57 @@ String extend [
 Collection extend [
     asCsv [ ^CSV format: self ]
 ]
+
+"evaluating and compiling source at run time"
+SystemDictionary extend [
+    evaluate: aString [ <primitive: evaluate> ^nil ]
+    fileIn: aString [ <primitive: fileInString> ^nil ]
+]
+
+Behavior extend [
+    compile: aString [
+        | first rest src i |
+        i := aString indexOf: $[.
+        (i > 0 and: [(aString copyFrom: 1 to: i - 1) allSatisfy: [:c | c ~= $^ and: [c ~= $|]]])
+            ifTrue: [src := aString]
+            ifFalse: [
+                i := (aString indexOf: $^).
+                (i = 0 or: [(aString indexOf: $|) between: 1 and: i - 1]) ifTrue: [i := aString indexOf: $|].
+                i = 0 ifTrue: [i := aString size + 1].
+                src := (aString copyFrom: 1 to: i - 1), ' [ ', (aString copyFrom: i to: aString size), ' ]'].
+        self fileInSource: self name, ' extend [ ', src, ' ]'.
+        ^self
+    ]
+    evaluate: aString [ ^Smalltalk evaluate: aString ]
+    fileInSource: aString [ <primitive: fileInString> ^nil ]
+]
+
+"a snapshot of the stack, answered by thisContext"
+Object subclass: Context [
+    | receiver selector methodClass sender |
+    receiver [ ^receiver ]
+    selector [ ^selector ]
+    methodClass [ ^methodClass ]
+    sender [ ^sender ]
+    parentContext [ ^sender ]
+    isTopLevel [ ^sender isNil ]
+    depth [ | n c | n := 0. c := self. [c notNil] whileTrue: [n := n + 1. c := c sender]. ^n ]
+    printOn: aStream [
+        methodClass isNil ifTrue: [^aStream nextPutAll: 'UndefinedObject>>', selector].
+        receiver class == methodClass
+            ifTrue: [aStream nextPutAll: methodClass name, '>>', selector]
+            ifFalse: [aStream nextPutAll: receiver class name, '(', methodClass name, ')>>', selector]
+    ]
+    backtrace [
+        | c |
+        c := self.
+        [c notNil] whileTrue: [Transcript showCr: c printString. c := c sender]
+    ]
+    backtraceString [
+        | ws c |
+        ws := WriteStream on: String new.
+        c := self.
+        [c notNil] whileTrue: [ws nextPutAll: c printString; nl. c := c sender].
+        ^ws contents
+    ]
+]

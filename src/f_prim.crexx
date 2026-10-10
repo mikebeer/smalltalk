@@ -1348,6 +1348,11 @@ prim_c: procedure = .int
       if isstr(a1) = 0 then return 0
       return eval_string(o_s[a1 % 2])
     end
+    when p = PR_FILEINSTR then do
+      if isstr(a1) = 0 then return 0
+      call file_in o_s[a1 % 2], "compile"
+      return rcv
+    end
     when p = PR_EXCINFO then do
       /* a1: 1 = print trace and abort, 2 = print trace only */
       call print_trace

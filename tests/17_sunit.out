@@ -1,0 +1,30 @@
+tearDown testAdd
+tearDown testDeny
+tearDown testError
+tearDown testFailing
+tearDown testRaise
+tearDown testRaiseMissing
+tearDown testSize
+StackTest: 7 run, 4 passed, 2 failed, 1 errors
+  FAIL StackTest>>#testFailing: Expected 5 but got 2
+  FAIL StackTest>>#testRaiseMissing: Expected ZeroDivide was not raised
+  ERROR StackTest>>#testError: did not understand #foo
+7
+tearDown testAdd
+1 run, 1 passed, 0 failed, 0 errors
+8
+tearDown testAdd
+tearDown testDeny
+tearDown testError
+tearDown testExtra
+tearDown testFailing
+tearDown testRaise
+tearDown testRaiseMissing
+tearDown testSize
+8 run, 5 passed, 2 failed, 1 errors
+tearDown testFailing
+1
+tearDown testSize
+tearDown testDeny
+2 run, 2 passed, 0 failed, 0 errors
+true
