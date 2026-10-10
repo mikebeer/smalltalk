@@ -833,6 +833,8 @@ parse_bytearray: procedure = .int
   do m = 1 to n
     call slot_put arr, m - 1, tmp[m]
   end
+  m = find_class("ByteArray")
+  if m > 0 then o_cls[arr % 2] = m
   return arr
 
 /* [ :a :b | | t | stmts ] */

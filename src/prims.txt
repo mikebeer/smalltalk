@@ -158,6 +158,7 @@ PR_SYSCMD sysCmd
 PR_SYSRC sysRc
 PR_SYSERR sysErr
 PR_FILEINSTR fileInString
+PR_ALLINST allInstances
 PR_SOCKNEW sockNew
 PR_SOCKCLOSE sockClose
 PR_SOCKCONNECT sockConnect

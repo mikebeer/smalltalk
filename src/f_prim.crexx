@@ -1348,6 +1348,24 @@ prim_c: procedure = .int
       if isstr(a1) = 0 then return 0
       return eval_string(o_s[a1 % 2])
     end
+    when p = PR_ALLINST then do
+      if rcv // 2 \= 0 then return 0
+      if o_kind[rcv % 2] \= KD_CLS & o_kind[rcv % 2] \= KD_META then return 0
+      c = o_x[rcv % 2]
+      k = 0
+      do i = 1 to no
+        if o_cls[i] = c then k = k + 1
+      end
+      r = mkarray(k)
+      k = 0
+      do i = 1 to no
+        if o_cls[i] = c then do
+          sl[o_slot[r % 2] + k] = i * 2
+          k = k + 1
+        end
+      end
+      return r
+    end
     when p = PR_FILEINSTR then do
       if isstr(a1) = 0 then return 0
       call file_in o_s[a1 % 2], "compile"
