@@ -146,7 +146,7 @@ static void repl_loop(void)
 static const char *const lib_files[] = {
     "kernel.st", "numbers.st", "collections.st", "streams.st", "exceptions.st",
     "extras.st", "structures.st", "regex.st", "system.st", "net.st", "sunit.st",
-    "process.st", "more.st", 0
+    "process.st", "more.st", "more2.st", 0
 };
 
 static char *join_path(const char *dir, const char *f)

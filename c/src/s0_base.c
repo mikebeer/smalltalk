@@ -135,7 +135,7 @@ static long *fl_head;
 static long flcap;
 static oop *ast;
 static long asp, astcap;
-#define CDEPTH_MAX 20000
+#define CDEPTH_MAX 5000
 static long *cs_m;
 static oop *cs_r;
 static long cdepth;

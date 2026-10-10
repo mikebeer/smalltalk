@@ -68,3 +68,16 @@ it afterwards. Set `CREXX` to the `crexx` driver if it is not on your `PATH`.
 
 Rebuild after editing `src/`: `python3 build.py` (the launcher recompiles automatically).
 Run the tests with `tests/run_tests.sh`.
+
+## C89 version
+
+`c/` holds a strict C89 port (one amalgamated file, `c/st_all.c`) that reads the same `lib/*.st`.
+Build with `make -C c`, test with `make -C c test`. It is roughly 75-95x faster than the CREXX version
+(fib 1245 ms -> 17 ms, loops 2728 -> 33, collections 10929 -> 144; startup 9 ms vs 1.4 s).
+The C version has no Unicode or sockets. Recursion depth is limited to 5000 frames.
+
+## More protocol (lib/more2.st)
+
+About 250 extra selectors for Pharo/GNU compatibility: String/Symbol/Character helpers, Integer/Float
+constants and roots, Random shuffle/choice, collection helpers (binarySearch:, transposed, newFrom:),
+stream helpers, Point vector ops, Date/Time/Duration extras, TimeZone and DateTime UTC offsets.

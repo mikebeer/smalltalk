@@ -48,7 +48,7 @@ do while ia <= av.0
   ia = ia + 1
 end
 call boot
-libs = "kernel.st numbers.st collections.st streams.st exceptions.st extras.st structures.st regex.st system.st net.st sunit.st process.st more.st"
+libs = "kernel.st numbers.st collections.st streams.st exceptions.st extras.st structures.st regex.st system.st net.st sunit.st process.st more.st more2.st"
 do ia = 1 to words(libs)
   lf = libdir || "/" || word(libs, ia)
   ltxt = read_file(lf)
@@ -1773,7 +1773,7 @@ repl_loop: procedure = .void
   ul = .int
   cmd = .string
   buf = ""
-  call outs "CREXX Smalltalk - type exit to leave" || '0a'x
+  call outs "Smalltalk - type exit to leave" || '0a'x
   do forever
     if px_si[2] = 1 then leave
     if buf == "" then call outs "st> "
