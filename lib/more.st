@@ -172,3 +172,89 @@ Behavior extend [
 Object extend [
     become: other [ <primitive: become> ^self error: 'become: needs two heap objects' ]
 ]
+
+"Transcript redirection"
+TextCollector extend [
+    redirectTo: aStream [ Smalltalk at: #TranscriptTarget put: aStream ]
+    stopRedirect [ Smalltalk at: #TranscriptTarget put: nil ]
+    isRedirected [ ^(Smalltalk at: #TranscriptTarget ifAbsent: [nil]) notNil ]
+    "answers what the block writes on the Transcript, as a String"
+    capture: aBlock [
+        | ws saved |
+        ws := WriteStream on: String new.
+        saved := Smalltalk at: #TranscriptTarget ifAbsent: [nil].
+        Smalltalk at: #TranscriptTarget put: ws.
+        aBlock ensure: [Smalltalk at: #TranscriptTarget put: saved].
+        ^ws contents
+    ]
+]
+Smalltalk at: #TranscriptTarget put: nil.
+
+Dictionary subclass: LookupTable [
+]
+IdentityDictionary subclass: IdentityLookupTable [
+]
+Set subclass: WeakSet [
+]
+IdentitySet subclass: WeakIdentitySet [
+]
+
+"a binary heap: removeFirst answers the smallest element (by the sort block)"
+Collection subclass: Heap [
+    | items sortBlock |
+    Heap class >> new [ ^self basicNew setBlock: [:a :b | a <= b] ]
+    Heap class >> sortBlock: aBlock [ ^self basicNew setBlock: aBlock ]
+    Heap class >> withAll: aCollection [ | h | h := self new. aCollection do: [:e | h add: e]. ^h ]
+    setBlock: aBlock [ items := OrderedCollection new. sortBlock := aBlock ]
+    size [ ^items size ]
+    isEmpty [ ^items isEmpty ]
+    first [ items isEmpty ifTrue: [^self error: 'heap is empty']. ^items first ]
+    do: aBlock [ items do: aBlock ]
+    add: x [
+        | i p |
+        items addLast: x.
+        i := items size.
+        [i > 1 and: [sortBlock value: x value: (items at: (p := i // 2))]] whileTrue: [
+            items at: i put: (items at: p).
+            i := p].
+        items at: i put: x.
+        ^x
+    ]
+    removeFirst [
+        | top last i c n done |
+        items isEmpty ifTrue: [^self error: 'heap is empty'].
+        top := items first.
+        last := items removeLast.
+        n := items size.
+        n = 0 ifTrue: [^top].
+        i := 1.
+        done := false.
+        [done not and: [i * 2 <= n]] whileTrue: [
+            c := i * 2.
+            (c < n and: [sortBlock value: (items at: c + 1) value: (items at: c)]) ifTrue: [c := c + 1].
+            (sortBlock value: (items at: c) value: last)
+                ifTrue: [items at: i put: (items at: c). i := c]
+                ifFalse: [done := true]].
+        items at: i put: last.
+        ^top
+    ]
+    removeAll [ items := OrderedCollection new ]
+    asSortedArray [ | h r | h := Heap sortBlock: sortBlock. items do: [:e | h add: e]. r := OrderedCollection new. [h isEmpty] whileFalse: [r add: h removeFirst]. ^r asArray ]
+    printOn: aStream [ aStream nextPutAll: 'a Heap(', self size printString, ')' ]
+]
+
+"a period of time from a start DateTime"
+Object subclass: Timespan [
+    | start duration |
+    Timespan class >> starting: aDateTime duration: aDuration [ ^self basicNew setStart: aDateTime duration: aDuration ]
+    Timespan class >> starting: a ending: b [ ^self starting: a duration: b - a ]
+    setStart: s duration: d [ start := s. duration := d ]
+    start [ ^start ]
+    duration [ ^duration ]
+    end [ ^start + duration ]
+    includes: aDateTime [ ^aDateTime >= start and: [aDateTime < self end] ]
+    overlaps: other [ ^start < other end and: [other start < self end] ]
+    = other [ ^(other isKindOf: Timespan) and: [start = other start and: [duration = other duration]] ]
+    hash [ ^start hash bitXor: duration hash ]
+    printOn: aStream [ aStream print: start; nextPutAll: ' for '; print: duration ]
+]

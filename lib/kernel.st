@@ -340,7 +340,13 @@ Message class extend [ selector: s arguments: a [ ^self new selector: s argument
 TextCollector class extend [ new [ ^self basicNew ] ]
 
 TextCollector extend [
-    nextPutAll: s [ <primitive: transcript> ^self nextPutAll: s displayString ]
+    primPut: s [ <primitive: transcript> ^self primPut: s displayString ]
+    nextPutAll: s [
+        | t |
+        t := Smalltalk at: #TranscriptTarget ifAbsent: [nil].
+        t notNil ifTrue: [^t nextPutAll: s displayString].
+        ^self primPut: s
+    ]
     nextPut: c [ ^self nextPutAll: (String with: c) ]
     show: s [ ^self nextPutAll: s ]
     showCr: s [ self nextPutAll: s. self nl ]
