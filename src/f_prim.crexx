@@ -333,6 +333,7 @@ do_signal: procedure = .int
    --------------------------------------------------------------------- */
 prim: procedure = .int
   arg p = .int, rcv = .int, base = .int, na = .int
+  if p >= PR_SOCKNEW then return prim_net(p, rcv, base, na)
   if p < PR_STRSIZE then return prim_a(p, rcv, base, na)
   if p < PR_BLOCKVALUE then return prim_b(p, rcv, base, na)
   return prim_c(p, rcv, base, na)
@@ -1631,3 +1632,62 @@ read_file_exact: procedure = .string
   assembler getbyte lb, b, off
   if lb \= 10 then t = left(t, length(t) - 1)
   return t
+
+/* networking: sockets from the rxsocket library */
+prim_net: procedure = .int
+  arg p = .int, rcv = .int, base = .int, na = .int
+  a1 = .int
+  a2 = .int
+  a3 = .int
+  h = .int
+  r = .int
+  s = .string
+  a1 = ast[base + 1]
+  a2 = ast[base + 2]
+  a3 = ast[base + 3]
+  if p = PR_SOCKNEW then return mkint(socketcreate())
+  if a1 // 2 = 0 then return 0
+  h = intval(a1)
+  select
+    when p = PR_SOCKCLOSE then return mkint(socketclose(h))
+    when p = PR_SOCKCONNECT | p = PR_SOCKTLS | p = PR_SOCKBIND then do
+      if isstr(a2) = 0 | a3 // 2 = 0 then return 0
+      if p = PR_SOCKCONNECT then r = socketconnect(h, o_s[a2 % 2], intval(a3))
+      else if p = PR_SOCKTLS then r = socketconnecttls(h, o_s[a2 % 2], intval(a3))
+      else r = socketbind(h, o_s[a2 % 2], intval(a3))
+      return mkint(r)
+    end
+    when p = PR_SOCKLISTEN then do
+      if a2 // 2 = 0 then return 0
+      return mkint(socketlisten(h, intval(a2)))
+    end
+    when p = PR_SOCKACCEPT then return mkint(socketaccept(h))
+    when p = PR_SOCKSEND then do
+      if isstr(a2) = 0 then return 0
+      return mkint(socketsend(h, o_s[a2 % 2]))
+    end
+    when p = PR_SOCKRECV then do
+      if a2 // 2 = 0 then return 0
+      s = socketrecv(h, intval(a2))
+      return mkstr(s)
+    end
+    when p = PR_SOCKPENDING then return mkint(socketpending(h))
+    when p = PR_SOCKTIMEOUT then do
+      if a2 // 2 = 0 then return 0
+      return mkint(sockettimeout(h, intval(a2)))
+    end
+    when p = PR_SOCKSTATUS then return mkint(socketstatus(h))
+    when p = PR_SOCKERROR then return mkstr(socketerror(h))
+    when p = PR_SOCKPEER then return mkstr(socketpeer(h))
+    when p = PR_SOCKLOCAL then return mkstr(socketlocal(h))
+    when p = PR_SOCKNODELAY then do
+      if a2 // 2 = 0 then return 0
+      return mkint(socketnodelay(h, intval(a2)))
+    end
+    when p = PR_SOCKSHUT then do
+      if a2 // 2 = 0 then return 0
+      return mkint(socketshutdown(h, intval(a2)))
+    end
+    otherwise return 0
+  end
+  return 0

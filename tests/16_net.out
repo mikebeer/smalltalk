@@ -1,0 +1,25 @@
+server got: hello server
+client got: line one
+client got: line two
+exactly 4: abcd
+rest: efghij
+nil
+false
+connect failed (expected)
+'https'
+'example.com'
+443
+'/a/b'
+'x=1&y=2'
+true
+8080
+'/'
+'/'
+404
+'Not Found'
+'missing'
+'yes'
+nil
+false
+'hello world!!!!'
+true

@@ -9,6 +9,7 @@ options levelb numeric_classic
 import rxfnsb
 import rxfloat
 import rxfs
+import rxsocket
 import _rxsysb
 @@EXPOSE@@
 
@@ -43,7 +44,7 @@ do while ia <= av.0
   ia = ia + 1
 end
 call boot
-libs = "kernel.st numbers.st collections.st streams.st exceptions.st extras.st structures.st regex.st system.st"
+libs = "kernel.st numbers.st collections.st streams.st exceptions.st extras.st structures.st regex.st system.st net.st"
 do ia = 1 to words(libs)
   lf = libdir || "/" || word(libs, ia)
   ltxt = read_file(lf)
