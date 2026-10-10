@@ -1,0 +1,27 @@
+start
+after fork
+a Process('unnamed', priority 4, ready)
+in forked process
+true
+worker running
+main resumed
+OrderedCollection (1 4 9 16 25 )
+OrderedCollection ('high' 'main' 'same' 'after yield' 'low' )
+9
+true
+true
+running
+cleanup
+Error in process unnamed: The program attempted to divide a number by zero
+still alive
+resumed process ran
+a Process('main', priority 4, running)
+4
+after delay
+Object: a ProcessorScheduler error: deadlock: Semaphore wait with no other process able to run
+ProcessorScheduler(Object)>>error:
+ProcessorScheduler>>deadlock:
+ProcessorScheduler>>waitUntil:for:
+Semaphore>>wait
+UndefinedObject>>executeStatements
+end

@@ -240,6 +240,7 @@ top_item: procedure = .void
     if pk_t = TK_LB then do
       call advance
       call advance
+      in_eval = 1
       do forever
         do while tk = TK_DOT
           call advance
@@ -254,6 +255,8 @@ top_item: procedure = .void
         if tk = TK_DOT then call advance
       end
       if tk = TK_RB then call advance
+      in_eval = 0
+      call run_scheduler
       return
     end
   end

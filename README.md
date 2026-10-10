@@ -29,6 +29,7 @@ it afterwards. Set `CREXX` to the `crexx` driver if it is not on your `PATH`.
   Association, String, Symbol, with the usual `do:`/`collect:`/`select:`/`inject:into:` protocol.
 * **Data structures**: Complex numbers, Stack, Queue, Matrix, LinkedList, Stopwatch, wildcard `match:`, JSON (`asJson`, `fromJson`), regular expressions (`matchesRegex:`, `allRegexMatches:`, `copyReplacingRegex:with:`), date parsing and formatting, `Smalltalk getenv:`, `Random seed:`; number formatting (`printShowingDecimalPlaces:`, `asStringWithCommas`).
 * **Files and system**: `FileStream` (`delete:`, `rename:to:`, `copy:to:`, `size:`), `Directory` (`entries:`, `create:`, `remove:`), `Smalltalk system:` / `systemOutput:`, `Smalltalk arguments`, CSV (`CSV parse:`, `CSV format:`).
+* **Testing and processes**: SUnit (`TestCase`, `TestSuite`, `TestResult`, `assert:equals:`, `should:raise:`); cooperative `Process`/`fork`/`forkAt:`, `Processor`, `Semaphore`, `SharedQueue`, `Delay` (one real thread: waiting runs the other ready processes); `thisContext`/`Context`, `Smalltalk evaluate:`, `Behavior compile:`.
 * **Networking**: `Socket` (`connectTo:port:`, `secureConnectTo:port:`, `listenOn:`, `accept`, `send:`, `sendLine:`, `receiveLine`, `receive:`, `receiveAll`), `URL`, and `HttpClient` (`get:`, `post:body:`, `getString:`, https, chunked answers) on top of CREXX's rxsocket.
 * **Streams**: ReadStream, WriteStream, ReadWriteStream, FileStream (`read:`, `write:`, `append:`, `exists:`); **Date** and **Time** (`today`, `now`, **DateTime**, calendar arithmetic); `Transcript` (`show:`, `showCr:`, `display:`,
   `print:`, `cr`, `tab`...).
@@ -57,7 +58,7 @@ it afterwards. Set `CREXX` to the `crexx` driver if it is not on your `PATH`.
 | --- | --- |
 | `src/*.crexx` | interpreter sources (lexer/parser, resolver, evaluator, primitives, big integers) |
 | `build.py` | concatenates `src/` into `smalltalk.crexx` and substitutes constants |
-| `lib/*.st` | class library written in Smalltalk (kernel, numbers, collections, streams, exceptions, extras, structures, regex, system, net) |
+| `lib/*.st` | class library written in Smalltalk (kernel, numbers, collections, streams, exceptions, extras, structures, regex, system, net, sunit, process) |
 | `bench/` | benchmarks (`bench/run_bench.sh`) |
 | `examples/` | sample programs |
 | `tests/` | regression tests (`tests/run_tests.sh`) |

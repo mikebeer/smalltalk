@@ -35,8 +35,8 @@ do while ia <= av.0
   else if oa == "-i" then px_si[8] = 1
   else if oa == "--" then do
     do ia = ia + 1 to av.0
-      px_si[10] = px_si[10] + 1
-      sargs[px_si[10]] = av[ia]
+      px_si[11] = px_si[11] + 1
+      sargs[px_si[11]] = av[ia]
     end
   end
   else do
@@ -46,7 +46,7 @@ do while ia <= av.0
   ia = ia + 1
 end
 call boot
-libs = "kernel.st numbers.st collections.st streams.st exceptions.st extras.st structures.st regex.st system.st net.st sunit.st"
+libs = "kernel.st numbers.st collections.st streams.st exceptions.st extras.st structures.st regex.st system.st net.st sunit.st process.st"
 do ia = 1 to words(libs)
   lf = libdir || "/" || word(libs, ia)
   ltxt = read_file(lf)
@@ -56,7 +56,7 @@ do ia = 1 to words(libs)
   end
   call file_in ltxt, word(libs, ia)
 end
-px_si[58] = find_class("Message")
+px_si[59] = find_class("Message")
 px_si[3] = 1
 if nfiles = 0 & px_si[8] = 0 then do
   do forever
@@ -127,45 +127,45 @@ init: procedure = .void
   px_si[8] = 0
   px_si[9] = 0
   px_si[10] = 0
-  sargs = .string[]
   px_si[11] = 0
+  sargs = .string[]
+  px_si[12] = 0
   px_ss[2] = ""
   px_ss[3] = "add sub mul div idiv mod quo rem lt gt le ge eq ne ident nident class basicSize basicAt basicAtPut instVarAt instVarAtPut identityHash perform performWithArgs isKindOf isMemberOf respondsTo shallowCopy basicNew basicNewSize floatOp truncated floor ceiling rounded asFloat bitAnd bitOr bitXor bitShift printString printRadix isInteger isFloat isString isSymbol isCharacter isNumber sqrtFloor strSize strAt strAtPut strCat strCopy strEq strLt strHash asSymbol asString upper lower strIndexOf strReplaceAll asNumber strTrim strSplit strReverse strNew charValue charFrom arrNew arrAt arrAtPut arrSize arrCopy arrFill arrReplace dictNew dictAt dictAtPut dictHas dictRemove dictKeys dictValues dictSize dictCopy blockValue blockValueArgs blockNumArgs whileTrue whileFalse onDo ensure ifCurtailed signal resume return retry pass outer retryUsing className superclass subclassNamed addInstVar instanceVariableNames selectors includesSelector basicNewClass compile addClassVar lookupSelector subclasses category globalAt globalAtPut globalHas transcript stdinLine stdinAtEnd msecs halt exit dnuArgs isNil evaluate displayString allSymbols excInfo bigOp floatPrint random strFind strCompare asStringOf secs format fileRead fileWrite dateStr timeStr randSeed getenv argCount argAt fileDelete fileRename fileKind dirCreate dirRemove dirList cwd chdir fileCopy fileSize sysCmd sysRc sysErr fileInString sockNew sockClose sockConnect sockConnectTls sockBind sockListen sockAccept sockSend sockRecv sockPending sockTimeout sockStatus sockError sockPeer sockLocal sockNoDelay sockShutdown"
-  px_ss[4] = "+ - * / // \\ < > <= >= = ~= == ~~ , value value: value:value: value:value:value: value:value:value:value: doesNotUnderstand: printString displayString printOn: hash signal defaultAction new initialize size at: at:put: do: isKindOf: messageText description next atEnd class isNil notNil lessOrEqual: -> key printString: displayNl printNl executeStatements mustBeBoolean error:"
+  px_ss[4] = "+ - * / // \\ < > <= >= = ~= == ~~ , value value: value:value: value:value:value: value:value:value:value: doesNotUnderstand: printString displayString printOn: hash signal defaultAction new initialize size at: at:put: do: isKindOf: messageText description next atEnd class isNil notNil lessOrEqual: -> key printString: displayNl printNl executeStatements mustBeBoolean error: runPending"
   /* ---- lexer / parser ---- */
   px_ss[5] = ""
-  px_si[12] = 1
-  px_si[13] = 0
+  px_si[13] = 1
   px_si[14] = 0
-  px_ss[6] = ""
   px_si[15] = 0
-  px_ss[7] = ""
+  px_ss[6] = ""
   px_si[16] = 0
-  px_sf[1] = 0.0
+  px_ss[7] = ""
   px_si[17] = 0
+  px_sf[1] = 0.0
   px_si[18] = 0
-  px_ss[8] = ""
   px_si[19] = 0
-  px_sf[2] = 0.0
+  px_ss[8] = ""
   px_si[20] = 0
+  px_sf[2] = 0.0
   px_si[21] = 0
   px_si[22] = 0
-  px_ss[9] = ""
   px_si[23] = 0
-  px_sf[3] = 0.0
+  px_ss[9] = ""
   px_si[24] = 0
+  px_sf[3] = 0.0
   px_si[25] = 0
   px_si[26] = 0
   px_si[27] = 0
   px_si[28] = 0
   px_si[29] = 0
-  /* ---- nodes ---- */
   px_si[30] = 0
-  n_s = .string[]
+  /* ---- nodes ---- */
   px_si[31] = 0
+  n_s = .string[]
+  px_si[32] = 0
   al = .int[]
   /* ---- resolver ---- */
-  px_si[32] = 0
   px_si[33] = 0
   px_si[34] = 0
   px_si[35] = 0
@@ -175,9 +175,10 @@ init: procedure = .void
   px_si[39] = 0
   px_si[40] = 0
   px_si[41] = 0
-  /* ---- objects ---- */
   px_si[42] = 0
+  /* ---- objects ---- */
   px_si[43] = 0
+  px_si[44] = 0
   o_s = .string[]
   o_f = .float[]
   sl = .int[]
@@ -185,10 +186,9 @@ init: procedure = .void
   chr_oop = .int[]
   chr_oop[256] = 0
   /* ---- classes ---- */
-  px_si[44] = 0
+  px_si[45] = 0
   cmap = .stem()
   cvmap = .stem()
-  px_si[45] = 0
   px_si[46] = 0
   px_si[47] = 0
   px_si[48] = 0
@@ -202,43 +202,44 @@ init: procedure = .void
   px_si[56] = 0
   px_si[57] = 0
   px_si[58] = 0
-  /* ---- methods ---- */
   px_si[59] = 0
+  /* ---- methods ---- */
+  px_si[60] = 0
   cm = .int[]
   lk = .int[]
   lkg = .int[]
-  px_si[60] = 1
+  px_si[61] = 1
   /* ---- globals, selectors ---- */
-  px_si[61] = 0
+  px_si[62] = 0
   gmap = .stem()
   g_val = .int[]
-  px_si[62] = 0
+  px_si[63] = 0
   selmap = .stem()
   sel_n = .int[]
   /* ---- frames and stacks ---- */
-  px_si[63] = 1
+  px_si[64] = 1
   vp = .int[]
   fl_head = .int[]
-  px_si[64] = 0
+  px_si[65] = 0
   ast = .int[]
   ast[20000] = 0
-  px_si[65] = 0
   px_si[66] = 0
-  /* ---- unwinding and handlers ---- */
   px_si[67] = 0
+  /* ---- unwinding and handlers ---- */
   px_si[68] = 0
   px_si[69] = 0
   px_si[70] = 0
   px_si[71] = 0
   px_si[72] = 0
-  /* ---- dictionaries ---- */
   px_si[73] = 0
+  /* ---- dictionaries ---- */
   px_si[74] = 0
+  px_si[75] = 0
   dmap = .stem()
   /* ---- big integers ---- */
   px_ss[10] = ""
   px_ss[11] = ""
-  px_si[75] = 0
+  px_si[76] = 0
   px_ss[12] = ""
   px_ss[13] = ""
   px_ss[14] = ""
@@ -292,27 +293,27 @@ boot: procedure = .void
     c = define_class(nm, sup)
     px_cls[c*8+5] = kd
     if nm == "Class" then do
-      px_si[46] = c
+      px_si[47] = c
       px_cls[(px_cls[(cmap["Object"])*8+2])*8+1] = c
     end
-    if nm == "Metaclass" then px_si[47] = c
+    if nm == "Metaclass" then px_si[48] = c
   end
-  do i = 1 to px_si[44]
-    if px_cls[i*8+3] = 1 then px_obj[(px_cls[i*8+8] % 2)*5+1] = px_si[47]
+  do i = 1 to px_si[45]
+    if px_cls[i*8+3] = 1 then px_obj[(px_cls[i*8+8] % 2)*5+1] = px_si[48]
   end
-  px_si[45] = find_class("Object")
-  px_si[48] = find_class("String")
-  px_si[49] = find_class("Symbol")
-  px_si[50] = find_class("FloatD")
-  px_si[51] = find_class("Character")
-  px_si[52] = find_class("Array")
-  px_si[53] = find_class("SmallInteger")
-  px_si[54] = find_class("LargePositiveInteger")
-  px_si[55] = find_class("LargeNegativeInteger")
-  px_si[56] = find_class("BlockClosure")
-  px_si[57] = find_class("UndefinedObject")
-  px_si[58] = find_class("Message")
-  px_obj[1*5+1] = px_si[57]
+  px_si[46] = find_class("Object")
+  px_si[49] = find_class("String")
+  px_si[50] = find_class("Symbol")
+  px_si[51] = find_class("FloatD")
+  px_si[52] = find_class("Character")
+  px_si[53] = find_class("Array")
+  px_si[54] = find_class("SmallInteger")
+  px_si[55] = find_class("LargePositiveInteger")
+  px_si[56] = find_class("LargeNegativeInteger")
+  px_si[57] = find_class("BlockClosure")
+  px_si[58] = find_class("UndefinedObject")
+  px_si[59] = find_class("Message")
+  px_obj[1*5+1] = px_si[58]
   px_obj[2*5+1] = find_class("True")
   px_obj[3*5+1] = find_class("False")
   call gset "nil", 2
@@ -362,9 +363,9 @@ line_of: procedure = .int
 
 perr: procedure = .void
   arg msg = .string
-  if px_si[14] = 0 then do
-    px_si[14] = 1
-    call outs "Parse error (" || px_ss[6] || " line " || line_of(px_si[12]) || "): " || msg || '0a'x
+  if px_si[15] = 0 then do
+    px_si[15] = 1
+    call outs "Parse error (" || px_ss[6] || " line " || line_of(px_si[13]) || "): " || msg || '0a'x
   end
   return
 
@@ -384,49 +385,49 @@ lex_token: procedure = .void
   isf = .int
   startp = .int
  do forever
-    if px_si[12] > px_si[13] then leave
-    c = substr(px_ss[5], px_si[12], 1)
-    if c == " " | c == '09'x | c == '0a'x | c == '0d'x | c == '0c'x then px_si[12] = px_si[12] + 1
+    if px_si[13] > px_si[14] then leave
+    c = substr(px_ss[5], px_si[13], 1)
+    if c == " " | c == '09'x | c == '0a'x | c == '0d'x | c == '0c'x then px_si[13] = px_si[13] + 1
     else if c == '"' then do
-      q = pos('"', px_ss[5], px_si[12] + 1)
-      if q = 0 then px_si[12] = px_si[13] + 1
-      else px_si[12] = q + 1
+      q = pos('"', px_ss[5], px_si[13] + 1)
+      if q = 0 then px_si[13] = px_si[14] + 1
+      else px_si[13] = q + 1
     end
     else leave
   end
   px_ss[8] = ""
-  px_si[19] = 0
+  px_si[20] = 0
   px_sf[2] = 0.0
-  px_si[20] = px_si[12]
-  if px_si[12] > px_si[13] then do
-    px_si[18] = 0
+  px_si[21] = px_si[13]
+  if px_si[13] > px_si[14] then do
+    px_si[19] = 0
     return
   end
-  c = substr(px_ss[5], px_si[12], 1)
+  c = substr(px_ss[5], px_si[13], 1)
   if isletter(c) = 1 then do
-    q = px_si[12]
-    do while q <= px_si[13] & (isletter(substr(px_ss[5], q, 1)) = 1 | isdigit(substr(px_ss[5], q, 1)) = 1)
+    q = px_si[13]
+    do while q <= px_si[14] & (isletter(substr(px_ss[5], q, 1)) = 1 | isdigit(substr(px_ss[5], q, 1)) = 1)
       q = q + 1
     end
     /* namespace dots:  Foo.Bar */
-    do while q < px_si[13] & substr(px_ss[5], q, 1) == "." & isletter(substr(px_ss[5], q + 1, 1)) = 1 & substr(px_ss[5], px_si[12], 1) >>= "A" & substr(px_ss[5], px_si[12], 1) <<= "Z" & substr(px_ss[5], q + 1, 1) >>= "A" & substr(px_ss[5], q + 1, 1) <<= "Z"
+    do while q < px_si[14] & substr(px_ss[5], q, 1) == "." & isletter(substr(px_ss[5], q + 1, 1)) = 1 & substr(px_ss[5], px_si[13], 1) >>= "A" & substr(px_ss[5], px_si[13], 1) <<= "Z" & substr(px_ss[5], q + 1, 1) >>= "A" & substr(px_ss[5], q + 1, 1) <<= "Z"
       q = q + 1
-      do while q <= px_si[13] & (isletter(substr(px_ss[5], q, 1)) = 1 | isdigit(substr(px_ss[5], q, 1)) = 1)
+      do while q <= px_si[14] & (isletter(substr(px_ss[5], q, 1)) = 1 | isdigit(substr(px_ss[5], q, 1)) = 1)
         q = q + 1
       end
     end
-    s = substr(px_ss[5], px_si[12], q - px_si[12])
+    s = substr(px_ss[5], px_si[13], q - px_si[13])
     if substr(px_ss[5], q, 1) == ":" & substr(px_ss[5], q + 1, 1) \== "=" then do
-      px_si[18] = 2
+      px_si[19] = 2
       px_ss[8] = s || ":"
-      px_si[12] = q + 1
+      px_si[13] = q + 1
       return
     end
-    px_si[18] = 1
+    px_si[19] = 1
     p = lastpos(".", s)
     if p > 0 then s = substr(s, p + 1)
     px_ss[8] = s
-    px_si[12] = q
+    px_si[13] = q
     return
   end
   if isdigit(c) = 1 then do
@@ -435,12 +436,12 @@ lex_token: procedure = .void
   end
   if c == "'" then do
     s = ""
-    q = px_si[12] + 1
+    q = px_si[13] + 1
     do forever
       p = pos("'", px_ss[5], q)
       if p = 0 then do
         s = s || substr(px_ss[5], q)
-        px_si[12] = px_si[13] + 1
+        px_si[13] = px_si[14] + 1
         leave
       end
       s = s || substr(px_ss[5], q, p - q)
@@ -449,98 +450,98 @@ lex_token: procedure = .void
         q = p + 2
       end
       else do
-        px_si[12] = p + 1
+        px_si[13] = p + 1
         leave
       end
     end
-    px_si[18] = 6
+    px_si[19] = 6
     px_ss[8] = s
     return
   end
   if c == "$" then do
-    px_si[18] = 8
-    px_si[19] = c2d(substr(px_ss[5], px_si[12] + 1, 1))
-    px_si[12] = px_si[12] + 2
+    px_si[19] = 8
+    px_si[20] = c2d(substr(px_ss[5], px_si[13] + 1, 1))
+    px_si[13] = px_si[13] + 2
     return
   end
   if c == "#" then do
-    d = substr(px_ss[5], px_si[12] + 1, 1)
+    d = substr(px_ss[5], px_si[13] + 1, 1)
     if d == "(" then do
-      px_si[18] = 21
-      px_si[12] = px_si[12] + 2
+      px_si[19] = 21
+      px_si[13] = px_si[13] + 2
       return
     end
     if d == "[" then do
-      px_si[18] = 22
-      px_si[12] = px_si[12] + 2
+      px_si[19] = 22
+      px_si[13] = px_si[13] + 2
       return
     end
     if d == "'" then do
-      px_si[12] = px_si[12] + 1
+      px_si[13] = px_si[13] + 1
       call lex_token
-      px_si[18] = 7
+      px_si[19] = 7
       return
     end
     if d == "#" then do
-      px_si[12] = px_si[12] + 1
+      px_si[13] = px_si[13] + 1
       call lex_token
       return
     end
     if isletter(d) = 1 then do
-      q = px_si[12] + 1
-      do while q <= px_si[13] & (isletter(substr(px_ss[5], q, 1)) = 1 | isdigit(substr(px_ss[5], q, 1)) = 1 | substr(px_ss[5], q, 1) == ":" | (substr(px_ss[5], q, 1) == "." & isletter(substr(px_ss[5], q + 1, 1)) = 1))
+      q = px_si[13] + 1
+      do while q <= px_si[14] & (isletter(substr(px_ss[5], q, 1)) = 1 | isdigit(substr(px_ss[5], q, 1)) = 1 | substr(px_ss[5], q, 1) == ":" | (substr(px_ss[5], q, 1) == "." & isletter(substr(px_ss[5], q + 1, 1)) = 1))
         q = q + 1
       end
-      px_si[18] = 7
-      px_ss[8] = substr(px_ss[5], px_si[12] + 1, q - px_si[12] - 1)
-      px_si[12] = q
+      px_si[19] = 7
+      px_ss[8] = substr(px_ss[5], px_si[13] + 1, q - px_si[13] - 1)
+      px_si[13] = q
       return
     end
     if isbinch(d) = 1 then do
-      q = px_si[12] + 1
-      do while q <= px_si[13] & isbinch(substr(px_ss[5], q, 1)) = 1
+      q = px_si[13] + 1
+      do while q <= px_si[14] & isbinch(substr(px_ss[5], q, 1)) = 1
         q = q + 1
       end
-      px_si[18] = 7
-      px_ss[8] = substr(px_ss[5], px_si[12] + 1, q - px_si[12] - 1)
-      px_si[12] = q
+      px_si[19] = 7
+      px_ss[8] = substr(px_ss[5], px_si[13] + 1, q - px_si[13] - 1)
+      px_si[13] = q
       return
     end
-    px_si[18] = 3
+    px_si[19] = 3
     px_ss[8] = "#"
-    px_si[12] = px_si[12] + 1
+    px_si[13] = px_si[13] + 1
     return
   end
-  px_si[12] = px_si[12] + 1
+  px_si[13] = px_si[13] + 1
   select
     when c == ":" then do
-      if substr(px_ss[5], px_si[12], 1) == "=" then do
-        px_si[12] = px_si[12] + 1
-        px_si[18] = 9
+      if substr(px_ss[5], px_si[13], 1) == "=" then do
+        px_si[13] = px_si[13] + 1
+        px_si[19] = 9
       end
-      else px_si[18] = 19
+      else px_si[19] = 19
       return
     end
-    when c == "^" then px_si[18] = 10
-    when c == "(" then px_si[18] = 11
-    when c == ")" then px_si[18] = 12
-    when c == "[" then px_si[18] = 13
-    when c == "]" then px_si[18] = 14
-    when c == "{" then px_si[18] = 15
-    when c == "}" then px_si[18] = 16
-    when c == "." then px_si[18] = 17
-    when c == ";" then px_si[18] = 18
-    when c == "!" then px_si[18] = 20
+    when c == "^" then px_si[19] = 10
+    when c == "(" then px_si[19] = 11
+    when c == ")" then px_si[19] = 12
+    when c == "[" then px_si[19] = 13
+    when c == "]" then px_si[19] = 14
+    when c == "{" then px_si[19] = 15
+    when c == "}" then px_si[19] = 16
+    when c == "." then px_si[19] = 17
+    when c == ";" then px_si[19] = 18
+    when c == "!" then px_si[19] = 20
     otherwise do
-      px_si[18] = 3
+      px_si[19] = 3
       s = c
-      do while px_si[12] <= px_si[13] & isbinch(substr(px_ss[5], px_si[12], 1)) = 1
-        s = s || substr(px_ss[5], px_si[12], 1)
-        px_si[12] = px_si[12] + 1
+      do while px_si[13] <= px_si[14] & isbinch(substr(px_ss[5], px_si[13], 1)) = 1
+        s = s || substr(px_ss[5], px_si[13], 1)
+        px_si[13] = px_si[13] + 1
       end
-      if length(s) > 1 & right(s, 1) == "-" & isdigit(substr(px_ss[5], px_si[12], 1)) = 1 then do
+      if length(s) > 1 & right(s, 1) == "-" & isdigit(substr(px_ss[5], px_si[13], 1)) = 1 then do
         s = left(s, length(s) - 1)
-        px_si[12] = px_si[12] - 1
+        px_si[13] = px_si[13] - 1
       end
       px_ss[8] = s
     end
@@ -558,16 +559,16 @@ lex_number: procedure = .void
   c = .string
   isf = .int
   neg = .int
-  q = px_si[12]
-  do while q <= px_si[13] & isdigit(substr(px_ss[5], q, 1)) = 1
+  q = px_si[13]
+  do while q <= px_si[14] & isdigit(substr(px_ss[5], q, 1)) = 1
     q = q + 1
   end
-  dg = substr(px_ss[5], px_si[12], q - px_si[12])
+  dg = substr(px_ss[5], px_si[13], q - px_si[13])
   if substr(px_ss[5], q, 1) == "r" & (isdigit(substr(px_ss[5], q + 1, 1)) = 1 | (substr(px_ss[5], q + 1, 1) >>= "A" & substr(px_ss[5], q + 1, 1) <<= "Z")) then do
     radix = dg as .int
     q = q + 1
     v = 0
-    do while q <= px_si[13]
+    do while q <= px_si[14]
       c = substr(px_ss[5], q, 1)
       if isdigit(c) = 1 then p = c as .int
       else if c >>= "A" & c <<= "Z" then p = c2d(c) - 55
@@ -576,9 +577,9 @@ lex_number: procedure = .void
       v = v * radix + p
       q = q + 1
     end
-    px_si[18] = 4
-    px_si[19] = v
-    px_si[12] = q
+    px_si[19] = 4
+    px_si[20] = v
+    px_si[13] = q
     return
   end
   fr = ""
@@ -586,7 +587,7 @@ lex_number: procedure = .void
   if substr(px_ss[5], q, 1) == "." & isdigit(substr(px_ss[5], q + 1, 1)) = 1 then do
     isf = 1
     p = q + 1
-    do while p <= px_si[13] & isdigit(substr(px_ss[5], p, 1)) = 1
+    do while p <= px_si[14] & isdigit(substr(px_ss[5], p, 1)) = 1
       p = p + 1
     end
     fr = substr(px_ss[5], q + 1, p - q - 1)
@@ -603,7 +604,7 @@ lex_number: procedure = .void
     end
     if isdigit(substr(px_ss[5], p, 1)) = 1 then do
       v = p
-      do while v <= px_si[13] & isdigit(substr(px_ss[5], v, 1)) = 1
+      do while v <= px_si[14] & isdigit(substr(px_ss[5], v, 1)) = 1
         v = v + 1
       end
       ex = substr(px_ss[5], p, v - p)
@@ -617,13 +618,13 @@ lex_number: procedure = .void
   /* scaled decimal 1.5s2 : treated as float */
   if substr(px_ss[5], q, 1) == "s" & isdigit(substr(px_ss[5], q + 1, 1)) = 1 & isf = 1 then do
     q = q + 1
-    do while q <= px_si[13] & isdigit(substr(px_ss[5], q, 1)) = 1
+    do while q <= px_si[14] & isdigit(substr(px_ss[5], q, 1)) = 1
       q = q + 1
     end
   end
-  px_si[12] = q
+  px_si[13] = q
   if isf = 1 then do
-    px_si[18] = 5
+    px_si[19] = 5
     if fr == "" then fr = "0"
     if ex == "" then px_sf[2] = (dg || "." || fr) as .float
     else px_sf[2] = (dg || "." || fr || "E" || ex) as .float
@@ -631,83 +632,83 @@ lex_number: procedure = .void
   end
   if ex \== "" & ex \== "0" then dg = dg || copies("0", ex as .int)
   if length(dg) > 18 then do
-    px_si[18] = 23
+    px_si[19] = 23
     px_ss[8] = dg
     return
   end
-  px_si[18] = 4
-  px_si[19] = dg as .int
+  px_si[19] = 4
+  px_si[20] = dg as .int
   return
 
 /* token stream with one token of lookahead */
 advance: procedure = .void
-  if px_si[21] = 1 then do
-    px_si[15] = px_si[22]
-    px_ss[7] = px_ss[9]
+  if px_si[22] = 1 then do
     px_si[16] = px_si[23]
-    px_sf[1] = px_sf[3]
+    px_ss[7] = px_ss[9]
     px_si[17] = px_si[24]
-    px_si[21] = 0
+    px_sf[1] = px_sf[3]
+    px_si[18] = px_si[25]
+    px_si[22] = 0
   end
   else do
     call lex_token
-    px_si[15] = px_si[18]
-    px_ss[7] = px_ss[8]
     px_si[16] = px_si[19]
-    px_sf[1] = px_sf[2]
+    px_ss[7] = px_ss[8]
     px_si[17] = px_si[20]
+    px_sf[1] = px_sf[2]
+    px_si[18] = px_si[21]
   end
   return
 
 peek_tok: procedure = .void
-  if px_si[21] = 0 then do
+  if px_si[22] = 0 then do
     call lex_token
-    px_si[22] = px_si[18]
-    px_ss[9] = px_ss[8]
     px_si[23] = px_si[19]
-    px_sf[3] = px_sf[2]
+    px_ss[9] = px_ss[8]
     px_si[24] = px_si[20]
-    px_si[21] = 1
+    px_sf[3] = px_sf[2]
+    px_si[25] = px_si[21]
+    px_si[22] = 1
   end
   return
 
 /* save / restore the whole lexer state (for backtracking) */
 lex_mark: procedure = .int
-  px_si[25] = px_si[25] + 1
-  px_mk[(px_si[25])*8+1] = px_si[12]
-  px_mk[(px_si[25])*8+2] = px_si[15]
-  px_str[(px_si[25])*8+1] = px_ss[7]
-  px_mk[(px_si[25])*8+3] = px_si[16]
-  px_fl[(px_si[25])*2+1] = px_sf[1]
-  px_mk[(px_si[25])*8+4] = px_si[17]
-  px_mk[(px_si[25])*8+5] = px_si[21]
-  px_mk[(px_si[25])*8+6] = px_si[22]
-  px_str[(px_si[25])*8+2] = px_ss[9]
-  px_mk[(px_si[25])*8+7] = px_si[23]
-  px_fl[(px_si[25])*2+2] = px_sf[3]
-  px_mk[(px_si[25])*8+8] = px_si[24]
-  return px_si[25]
+  px_si[26] = px_si[26] + 1
+  px_mk[(px_si[26])*8+1] = px_si[13]
+  px_mk[(px_si[26])*8+2] = px_si[16]
+  px_str[(px_si[26])*8+1] = px_ss[7]
+  px_mk[(px_si[26])*8+3] = px_si[17]
+  px_fl[(px_si[26])*2+1] = px_sf[1]
+  px_mk[(px_si[26])*8+4] = px_si[18]
+  px_mk[(px_si[26])*8+5] = px_si[22]
+  px_mk[(px_si[26])*8+6] = px_si[23]
+  px_str[(px_si[26])*8+2] = px_ss[9]
+  px_mk[(px_si[26])*8+7] = px_si[24]
+  px_fl[(px_si[26])*2+2] = px_sf[3]
+  px_mk[(px_si[26])*8+8] = px_si[25]
+  return px_si[26]
 
 lex_reset: procedure = .void
   arg m = .int
-  px_si[12] = px_mk[m*8+1]
-  px_si[15] = px_mk[m*8+2]
+  px_si[13] = px_mk[m*8+1]
+  px_si[16] = px_mk[m*8+2]
   px_ss[7] = px_str[m*8+1]
-  px_si[16] = px_mk[m*8+3]
+  px_si[17] = px_mk[m*8+3]
   px_sf[1] = px_fl[m*2+1]
-  px_si[17] = px_mk[m*8+4]
-  px_si[21] = px_mk[m*8+5]
-  px_si[22] = px_mk[m*8+6]
+  px_si[18] = px_mk[m*8+4]
+  px_si[22] = px_mk[m*8+5]
+  px_si[23] = px_mk[m*8+6]
   px_ss[9] = px_str[m*8+2]
-  px_si[23] = px_mk[m*8+7]
+  px_si[24] = px_mk[m*8+7]
   px_sf[3] = px_fl[m*2+2]
-  px_si[24] = px_mk[m*8+8]
-  px_si[25] = m - 1
+  px_si[25] = px_mk[m*8+8]
+  px_si[26] = m - 1
   return
 
 lex_drop: procedure = .void
   arg m = .int
-  px_si[25] = m - 1
+  px_si[26] = m - 1
   return
 
 /* ---------------------------------------------------------------------
@@ -715,19 +716,19 @@ lex_drop: procedure = .void
    --------------------------------------------------------------------- */
 nd: procedure = .int
   arg t = .int, a = .int, b = .int, c = .int, d = .int, i = .int, s = .string
-  px_si[30] = px_si[30] + 1
-  px_node[(px_si[30])*6+1] = t
-  px_node[(px_si[30])*6+2] = a
-  px_node[(px_si[30])*6+3] = b
-  px_node[(px_si[30])*6+4] = c
-  px_node[(px_si[30])*6+5] = d
-  px_node[(px_si[30])*6+6] = i
-  n_s[px_si[30]] = s
-  return px_si[30]
+  px_si[31] = px_si[31] + 1
+  px_node[(px_si[31])*6+1] = t
+  px_node[(px_si[31])*6+2] = a
+  px_node[(px_si[31])*6+3] = b
+  px_node[(px_si[31])*6+4] = c
+  px_node[(px_si[31])*6+5] = d
+  px_node[(px_si[31])*6+6] = i
+  n_s[px_si[31]] = s
+  return px_si[31]
 
 isbin: procedure = .int
   arg s = .string
-  if px_si[15] = 3 & px_ss[7] == s then return 1
+  if px_si[16] = 3 & px_ss[7] == s then return 1
   return 0
 
 /* statements until the closing token; returns an 14 node */
@@ -739,27 +740,27 @@ parse_stmts: procedure = .int
   tmp = .int[]
   n = 0
   do forever
-    do while px_si[15] = 17
+    do while px_si[16] = 17
       call advance
     end
-    if px_si[15] = endt | px_si[15] = 0 | px_si[14] = 1 then leave
-    if endt = 14 & px_si[15] = 20 then leave
+    if px_si[16] = endt | px_si[16] = 0 | px_si[15] = 1 then leave
+    if endt = 14 & px_si[16] = 20 then leave
     st = parse_statement()
     n = n + 1
     tmp[n] = st
-    if px_si[15] = 17 then call advance
+    if px_si[16] = 17 then call advance
     else leave
   end
-  first = px_si[31] + 1
+  first = px_si[32] + 1
   do st = 1 to n
-    px_si[31] = px_si[31] + 1
-    al[px_si[31]] = tmp[st]
+    px_si[32] = px_si[32] + 1
+    al[px_si[32]] = tmp[st]
   end
   return nd(14, first, n, 0, 0, 0, "")
 
 parse_statement: procedure = .int
   e = .int
-  if px_si[15] = 10 then do
+  if px_si[16] = 10 then do
     call advance
     e = parse_expr()
     return nd(45, e, 0, 0, 0, 0, "")
@@ -769,9 +770,9 @@ parse_statement: procedure = .int
 parse_expr: procedure = .int
   nme = .string
   e = .int
-  if px_si[15] = 1 then do
+  if px_si[16] = 1 then do
     call peek_tok
-    if px_si[22] = 9 then do
+    if px_si[23] = 9 then do
       nme = px_ss[7]
       call advance
       call advance
@@ -780,7 +781,7 @@ parse_expr: procedure = .int
     end
   end
   e = parse_keyword_expr()
-  if px_si[15] = 18 then e = parse_cascade(e)
+  if px_si[16] = 18 then e = parse_cascade(e)
   return e
 
 parse_cascade: procedure = .int
@@ -798,15 +799,15 @@ parse_cascade: procedure = .int
   /* the first message is the one already parsed */
   n = 1
   tmp[1] = nd(46, 0, px_node[e0*6+3], 0, px_node[e0*6+5], px_node[e0*6+6], n_s[e0])
-  do while px_si[15] = 18 & px_si[14] = 0
+  do while px_si[16] = 18 & px_si[15] = 0
     call advance
     n = n + 1
     tmp[n] = parse_msg_part()
   end
-  first = px_si[31] + 1
+  first = px_si[32] + 1
   do m = 1 to n
-    px_si[31] = px_si[31] + 1
-    al[px_si[31]] = tmp[m]
+    px_si[32] = px_si[32] + 1
+    al[px_si[32]] = tmp[m]
   end
   return nd(43, rcv, first, n, 0, 0, "")
 
@@ -818,33 +819,33 @@ parse_msg_part: procedure = .int
   n = .int
   m = .int
   tmp = .int[]
-  if px_si[15] = 1 then do
+  if px_si[16] = 1 then do
     sel = px_ss[7]
     call advance
     return nd(46, 0, 0, 0, 0, 0, sel)
   end
-  if px_si[15] = 3 then do
+  if px_si[16] = 3 then do
     sel = px_ss[7]
     call advance
     a = parse_unary_expr()
-    first = px_si[31] + 1
-    px_si[31] = px_si[31] + 1
-    al[px_si[31]] = a
+    first = px_si[32] + 1
+    px_si[32] = px_si[32] + 1
+    al[px_si[32]] = a
     return nd(46, 0, first, 0, 0, 1, sel)
   end
-  if px_si[15] = 2 then do
+  if px_si[16] = 2 then do
     sel = ""
     n = 0
-    do while px_si[15] = 2 & px_si[14] = 0
+    do while px_si[16] = 2 & px_si[15] = 0
       sel = sel || px_ss[7]
       call advance
       n = n + 1
       tmp[n] = parse_binary_expr()
     end
-    first = px_si[31] + 1
+    first = px_si[32] + 1
     do m = 1 to n
-      px_si[31] = px_si[31] + 1
-      al[px_si[31]] = tmp[m]
+      px_si[32] = px_si[32] + 1
+      al[px_si[32]] = tmp[m]
     end
     return nd(46, 0, first, 0, 0, n, sel)
   end
@@ -860,21 +861,21 @@ parse_keyword_expr: procedure = .int
   sup = .int
   tmp = .int[]
   rcv = parse_binary_expr()
-  if px_si[15] \= 2 then return rcv
+  if px_si[16] \= 2 then return rcv
   sup = px_node[rcv*6+5]
   if px_node[rcv*6+1] = 40 & n_s[rcv] == "super" then sup = 1
   sel = ""
   n = 0
-  do while px_si[15] = 2 & px_si[14] = 0
+  do while px_si[16] = 2 & px_si[15] = 0
     sel = sel || px_ss[7]
     call advance
     n = n + 1
     tmp[n] = parse_binary_expr()
   end
-  first = px_si[31] + 1
+  first = px_si[32] + 1
   do m = 1 to n
-    px_si[31] = px_si[31] + 1
-    al[px_si[31]] = tmp[m]
+    px_si[32] = px_si[32] + 1
+    al[px_si[32]] = tmp[m]
   end
   return mk_send(rcv, sel, first, n)
 
@@ -891,13 +892,13 @@ parse_binary_expr: procedure = .int
   sel = .string
   first = .int
   rcv = parse_unary_expr()
-  do while px_si[15] = 3 & px_si[14] = 0
+  do while px_si[16] = 3 & px_si[15] = 0
     sel = px_ss[7]
     call advance
     a = parse_unary_expr()
-    first = px_si[31] + 1
-    px_si[31] = px_si[31] + 1
-    al[px_si[31]] = a
+    first = px_si[32] + 1
+    px_si[32] = px_si[32] + 1
+    al[px_si[32]] = a
     rcv = mk_send(rcv, sel, first, 1)
   end
   return rcv
@@ -905,9 +906,9 @@ parse_binary_expr: procedure = .int
 parse_unary_expr: procedure = .int
   rcv = .int
   rcv = parse_primary()
-  do while px_si[15] = 1 & px_si[14] = 0
+  do while px_si[16] = 1 & px_si[15] = 0
     call peek_tok
-    if px_si[22] = 9 then leave
+    if px_si[23] = 9 then leave
     rcv = mk_send(rcv, px_ss[7], 0, 0)
     call advance
   end
@@ -918,7 +919,7 @@ parse_primary: procedure = .int
   e = .int
   t = .int
   o = .int
-  if px_si[15] = 1 then do
+  if px_si[16] = 1 then do
     s = px_ss[7]
     call advance
     if s == "nil" then return nd(1, 2, 0, 0, 0, 0, "")
@@ -927,63 +928,63 @@ parse_primary: procedure = .int
     if s == "thisContext" then return nd(16, 0, 0, 0, 0, 0, "")
     return nd(40, 0, 0, 0, 0, 0, s)
   end
-  if px_si[15] = 4 then do
-    o = mkint(px_si[16])
+  if px_si[16] = 4 then do
+    o = mkint(px_si[17])
     call advance
     return nd(1, o, 0, 0, 0, 0, "")
   end
-  if px_si[15] = 23 then do
+  if px_si[16] = 23 then do
     o = mkbig(px_ss[7])
     call advance
     return nd(1, o, 0, 0, 0, 0, "")
   end
-  if px_si[15] = 5 then do
+  if px_si[16] = 5 then do
     o = mkfloat(px_sf[1])
     call advance
     return nd(1, o, 0, 0, 0, 0, "")
   end
-  if px_si[15] = 6 then do
+  if px_si[16] = 6 then do
     o = mkstr(px_ss[7])
     call advance
     return nd(1, o, 0, 0, 0, 0, "")
   end
-  if px_si[15] = 7 then do
+  if px_si[16] = 7 then do
     o = mksym(px_ss[7])
     call advance
     return nd(1, o, 0, 0, 0, 0, "")
   end
-  if px_si[15] = 8 then do
-    o = mkchar(px_si[16])
+  if px_si[16] = 8 then do
+    o = mkchar(px_si[17])
     call advance
     return nd(1, o, 0, 0, 0, 0, "")
   end
-  if px_si[15] = 21 then do
+  if px_si[16] = 21 then do
     call advance
     o = parse_litarray()
     return nd(1, o, 0, 0, 0, 0, "")
   end
-  if px_si[15] = 22 then do
+  if px_si[16] = 22 then do
     call advance
     o = parse_bytearray()
     return nd(1, o, 0, 0, 0, 0, "")
   end
-  if px_si[15] = 11 then do
+  if px_si[16] = 11 then do
     call advance
     e = parse_expr()
-    if px_si[15] = 12 then call advance
+    if px_si[16] = 12 then call advance
     else call perr "missing )"
     return e
   end
-  if px_si[15] = 13 then return parse_block()
-  if px_si[15] = 15 then return parse_brace()
-  if px_si[15] = 3 & px_ss[7] == "-" then do
+  if px_si[16] = 13 then return parse_block()
+  if px_si[16] = 15 then return parse_brace()
+  if px_si[16] = 3 & px_ss[7] == "-" then do
     /* negative literal */
     call peek_tok
-    if px_si[22] = 4 | px_si[22] = 5 | px_si[22] = 23 then do
-      if px_si[24] = px_si[17] + 1 then do
+    if px_si[23] = 4 | px_si[23] = 5 | px_si[23] = 23 then do
+      if px_si[25] = px_si[18] + 1 then do
         call advance
-        if px_si[15] = 4 then o = mkint(0 - px_si[16])
-        else if px_si[15] = 5 then o = mkfloat(0.0 - px_sf[1])
+        if px_si[16] = 4 then o = mkint(0 - px_si[17])
+        else if px_si[16] = 5 then o = mkfloat(0.0 - px_sf[1])
         else o = mkbig("-" || px_ss[7])
         call advance
         return nd(1, o, 0, 0, 0, 0, "")
@@ -1003,22 +1004,22 @@ parse_brace: procedure = .int
   call advance
   n = 0
   do forever
-    do while px_si[15] = 17
+    do while px_si[16] = 17
       call advance
     end
-    if px_si[15] = 16 | px_si[15] = 0 | px_si[14] = 1 then leave
+    if px_si[16] = 16 | px_si[16] = 0 | px_si[15] = 1 then leave
     e = parse_expr()
     n = n + 1
     tmp[n] = e
-    if px_si[15] = 17 then call advance
+    if px_si[16] = 17 then call advance
     else leave
   end
-  if px_si[15] = 16 then call advance
+  if px_si[16] = 16 then call advance
   else call perr "missing }"
-  first = px_si[31] + 1
+  first = px_si[32] + 1
   do m = 1 to n
-    px_si[31] = px_si[31] + 1
-    al[px_si[31]] = tmp[m]
+    px_si[32] = px_si[32] + 1
+    al[px_si[32]] = tmp[m]
   end
   return nd(15, first, n, 0, 0, 0, "")
 
@@ -1032,12 +1033,12 @@ parse_litarray: procedure = .int
   tmp = .int[]
   n = 0
   do forever
-    if px_si[15] = 12 | px_si[15] = 0 | px_si[14] = 1 then leave
+    if px_si[16] = 12 | px_si[16] = 0 | px_si[15] = 1 then leave
     v = parse_litelem()
     n = n + 1
     tmp[n] = v
   end
-  if px_si[15] = 12 then call advance
+  if px_si[16] = 12 then call advance
   else call perr "missing ) in literal array"
   arr = mkarray(n)
   do m = 1 to n
@@ -1048,49 +1049,49 @@ parse_litarray: procedure = .int
 parse_litelem: procedure = .int
   o = .int
   s = .string
-  if px_si[15] = 4 then do
-    o = mkint(px_si[16])
+  if px_si[16] = 4 then do
+    o = mkint(px_si[17])
     call advance
     return o
   end
-  if px_si[15] = 23 then do
+  if px_si[16] = 23 then do
     o = mkbig(px_ss[7])
     call advance
     return o
   end
-  if px_si[15] = 5 then do
+  if px_si[16] = 5 then do
     o = mkfloat(px_sf[1])
     call advance
     return o
   end
-  if px_si[15] = 6 then do
+  if px_si[16] = 6 then do
     o = mkstr(px_ss[7])
     call advance
     return o
   end
-  if px_si[15] = 7 then do
+  if px_si[16] = 7 then do
     o = mksym(px_ss[7])
     call advance
     return o
   end
-  if px_si[15] = 8 then do
-    o = mkchar(px_si[16])
+  if px_si[16] = 8 then do
+    o = mkchar(px_si[17])
     call advance
     return o
   end
-  if px_si[15] = 21 | px_si[15] = 11 then do
+  if px_si[16] = 21 | px_si[16] = 11 then do
     call advance
     return parse_litarray()
   end
-  if px_si[15] = 22 | px_si[15] = 13 then do
+  if px_si[16] = 22 | px_si[16] = 13 then do
     call advance
     return parse_bytearray()
   end
-  if px_si[15] = 15 then do
+  if px_si[16] = 15 then do
     call advance
     return parse_litarray2()
   end
-  if px_si[15] = 1 then do
+  if px_si[16] = 1 then do
     s = px_ss[7]
     call advance
     if s == "nil" then return 2
@@ -1098,20 +1099,20 @@ parse_litelem: procedure = .int
     if s == "false" then return 6
     return mksym(s)
   end
-  if px_si[15] = 2 then do
+  if px_si[16] = 2 then do
     s = px_ss[7]
     call advance
-    do while px_si[15] = 2
+    do while px_si[16] = 2
       s = s || px_ss[7]
       call advance
     end
     return mksym(s)
   end
-  if px_si[15] = 3 then do
+  if px_si[16] = 3 then do
     s = px_ss[7]
     call advance
-    if s == "-" & (px_si[15] = 4 | px_si[15] = 5) then do
-      if px_si[15] = 4 then o = mkint(0 - px_si[16])
+    if s == "-" & (px_si[16] = 4 | px_si[16] = 5) then do
+      if px_si[16] = 4 then o = mkint(0 - px_si[17])
       else o = mkfloat(0.0 - px_sf[1])
       call advance
       return o
@@ -1130,12 +1131,12 @@ parse_litarray2: procedure = .int
   v = .int
   tmp = .int[]
   n = 0
-  do while px_si[15] \= 16 & px_si[15] \= 0 & px_si[14] = 0
+  do while px_si[16] \= 16 & px_si[16] \= 0 & px_si[15] = 0
     v = parse_litelem()
     n = n + 1
     tmp[n] = v
   end
-  if px_si[15] = 16 then call advance
+  if px_si[16] = 16 then call advance
   arr = mkarray(n)
   do m = 1 to n
     call slot_put arr, m - 1, tmp[m]
@@ -1148,12 +1149,12 @@ parse_bytearray: procedure = .int
   arr = .int
   tmp = .int[]
   n = 0
-  do while px_si[15] = 4
+  do while px_si[16] = 4
     n = n + 1
-    tmp[n] = mkint(px_si[16])
+    tmp[n] = mkint(px_si[17])
     call advance
   end
-  if px_si[15] = 14 then call advance
+  if px_si[16] = 14 then call advance
   else call perr "missing ] in byte array"
   arr = mkarray(n)
   do m = 1 to n
@@ -1170,12 +1171,12 @@ parse_block: procedure = .int
   body = .int
   call advance
   np = 0
-  first_p = px_si[29] + 1
-  do while px_si[15] = 19
+  first_p = px_si[30] + 1
+  do while px_si[16] = 19
     call advance
-    if px_si[15] = 1 then do
-      px_si[29] = px_si[29] + 1
-      px_str[(px_si[29])*8+3] = px_ss[7]
+    if px_si[16] = 1 then do
+      px_si[30] = px_si[30] + 1
+      px_str[(px_si[30])*8+3] = px_ss[7]
       np = np + 1
       call advance
     end
@@ -1187,12 +1188,12 @@ parse_block: procedure = .int
       /* [:a || t | ...]  -- the second bar opens a temporaries list */
       px_ss[7] = "|"
     end
-    else if px_si[15] \= 14 then call perr "| expected after block parameters"
+    else if px_si[16] \= 14 then call perr "| expected after block parameters"
   end
-  first_t = px_si[29] + 1
+  first_t = px_si[30] + 1
   nt2 = parse_temps()
   body = parse_stmts(14)
-  if px_si[15] = 14 then call advance
+  if px_si[16] = 14 then call advance
   else call perr "missing ]"
   return nd(44, body, first_p, np, first_t, nt2, "")
 
@@ -1204,9 +1205,9 @@ parse_temps: procedure = .int
     if isbin("||") = 1 then call advance
     else do
       call advance
-      do while px_si[15] = 1
-        px_si[29] = px_si[29] + 1
-        px_str[(px_si[29])*8+3] = px_ss[7]
+      do while px_si[16] = 1
+        px_si[30] = px_si[30] + 1
+        px_str[(px_si[30])*8+3] = px_ss[7]
         n = n + 1
         call advance
       end
@@ -1224,34 +1225,34 @@ skip_pragma: procedure = .void
   /* at the "<" of a pragma */
   nme = .string
   call advance
-  if px_si[15] = 2 & px_ss[7] == "primitive:" then do
+  if px_si[16] = 2 & px_ss[7] == "primitive:" then do
     call advance
-    if px_si[15] = 1 then do
-      px_si[26] = wordpos(px_ss[7], px_ss[3])
-      if px_si[26] = 0 then call perr "unknown primitive " || px_ss[7]
+    if px_si[16] = 1 then do
+      px_si[27] = wordpos(px_ss[7], px_ss[3])
+      if px_si[27] = 0 then call perr "unknown primitive " || px_ss[7]
     end
-    else if px_si[15] = 4 then px_si[26] = px_si[16]
+    else if px_si[16] = 4 then px_si[27] = px_si[17]
     call advance
   end
-  do while px_si[15] \= 0 & isbin(">") = 0
+  do while px_si[16] \= 0 & isbin(">") = 0
     call advance
   end
-  if px_si[15] \= 0 then call advance
+  if px_si[16] \= 0 then call advance
   return
 
 /* method body after the "[": temps, pragmas, statements, up to "]" */
 parse_method_body: procedure = .int
   body = .int
-  px_si[26] = 0
-  px_si[27] = px_si[29] + 1
-  px_si[28] = 0
+  px_si[27] = 0
+  px_si[28] = px_si[30] + 1
+  px_si[29] = 0
   do forever
-    if isbin("|") = 1 | isbin("||") = 1 then px_si[28] = px_si[28] + parse_temps()
+    if isbin("|") = 1 | isbin("||") = 1 then px_si[29] = px_si[29] + parse_temps()
     else if isbin("<") = 1 then call skip_pragma
     else leave
   end
   body = parse_stmts(14)
-  if px_si[15] = 14 then call advance
+  if px_si[16] = 14 then call advance
   else call perr "missing ] at end of method"
   return body
 
@@ -1266,32 +1267,32 @@ parse_method_def: procedure = .void
   ntemps = .int
   prim = .int
   startp = .int
-  startp = px_si[17]
+  startp = px_si[18]
   sel = ""
   np = 0
-  pfirst = px_si[29] + 1
-  if px_si[15] = 1 then do
+  pfirst = px_si[30] + 1
+  if px_si[16] = 1 then do
     sel = px_ss[7]
     call advance
   end
-  else if px_si[15] = 3 then do
+  else if px_si[16] = 3 then do
     sel = px_ss[7]
     call advance
-    if px_si[15] = 1 then do
-      px_si[29] = px_si[29] + 1
-      px_str[(px_si[29])*8+3] = px_ss[7]
+    if px_si[16] = 1 then do
+      px_si[30] = px_si[30] + 1
+      px_str[(px_si[30])*8+3] = px_ss[7]
       np = 1
       call advance
     end
     else call perr "binary method parameter expected"
   end
-  else if px_si[15] = 2 then do
-    do while px_si[15] = 2
+  else if px_si[16] = 2 then do
+    do while px_si[16] = 2
       sel = sel || px_ss[7]
       call advance
-      if px_si[15] = 1 then do
-        px_si[29] = px_si[29] + 1
-        px_str[(px_si[29])*8+3] = px_ss[7]
+      if px_si[16] = 1 then do
+        px_si[30] = px_si[30] + 1
+        px_str[(px_si[30])*8+3] = px_ss[7]
         np = np + 1
         call advance
       end
@@ -1303,16 +1304,16 @@ parse_method_def: procedure = .void
     call advance
     return
   end
-  if px_si[15] \= 13 then do
+  if px_si[16] \= 13 then do
     call perr "[ expected after method pattern " || sel
     return
   end
   call advance
   body = parse_method_body()
-  if px_si[14] = 1 then return
-  tfirst = px_si[27]
-  ntemps = px_si[28]
-  prim = px_si[26]
+  if px_si[15] = 1 then return
+  tfirst = px_si[28]
+  ntemps = px_si[29]
+  prim = px_si[27]
   call compile_method c, sel, pfirst, np, tfirst, ntemps, body, prim, startp
   return
 
@@ -1325,8 +1326,8 @@ parse_class_body: procedure = .void
   e = .int
   m = .int
   do forever
-    if px_si[15] = 14 | px_si[15] = 0 | px_si[14] = 1 then leave
-    if px_si[15] = 17 then do
+    if px_si[16] = 14 | px_si[16] = 0 | px_si[15] = 1 then leave
+    if px_si[16] = 17 then do
       call advance
       iterate
     end
@@ -1335,7 +1336,7 @@ parse_class_body: procedure = .void
         if isbin("||") = 1 then call advance
         else do
           call advance
-          do while px_si[15] = 1
+          do while px_si[16] = 1
             call add_ivar cnum, px_ss[7]
             call advance
           end
@@ -1346,22 +1347,22 @@ parse_class_body: procedure = .void
       iterate
     end
     if isbin("<") = 1 & pattern_follows() = 0 then do
-      px_si[26] = 0
+      px_si[27] = 0
       call skip_pragma
       iterate
     end
-    if px_si[15] = 1 then do
+    if px_si[16] = 1 then do
       call peek_tok
-      if px_si[22] = 9 then do
+      if px_si[23] = 9 then do
         nme = px_ss[7]
         call advance
         call advance
         e = parse_expr()
-        if px_si[15] = 17 then call advance
-        if px_si[14] = 0 then call define_classvar cnum, nme, e
+        if px_si[16] = 17 then call advance
+        if px_si[15] = 0 then call define_classvar cnum, nme, e
         iterate
       end
-      if px_si[22] = 1 & px_ss[9] == "class" then do
+      if px_si[23] = 1 & px_ss[9] == "class" then do
         /* Foo class >> sel [ ]   or   Foo class [ | a | ] */
         nme = px_ss[7]
         m = lex_mark()
@@ -1378,7 +1379,7 @@ parse_class_body: procedure = .void
           call parse_method_def px_cls[c2*8+2]
           iterate
         end
-        if px_si[15] = 13 then do
+        if px_si[16] = 13 then do
           call lex_drop m
           call advance
           c2 = find_class(nme)
@@ -1391,7 +1392,7 @@ parse_class_body: procedure = .void
         end
         call lex_reset m
       end
-      if px_si[22] = 3 & px_ss[9] == ">>" then do
+      if px_si[23] = 3 & px_ss[9] == ">>" then do
         nme = px_ss[7]
         call advance
         call advance
@@ -1406,7 +1407,7 @@ parse_class_body: procedure = .void
     end
     call parse_method_def cnum
   end
-  if px_si[15] = 14 then call advance
+  if px_si[16] = 14 then call advance
   return
 
 /* "Foo class [ | a b | ]" and "Foo class extend [ ... ]" style bodies for the metaclass */
@@ -1421,24 +1422,24 @@ pattern_follows: procedure = .int
   ok = .int
   m = lex_mark()
   ok = 0
-  if px_si[15] = 1 then do
+  if px_si[16] = 1 then do
     call advance
-    if px_si[15] = 13 then ok = 1
+    if px_si[16] = 13 then ok = 1
   end
-  else if px_si[15] = 3 then do
+  else if px_si[16] = 3 then do
     call advance
-    if px_si[15] = 1 then do
+    if px_si[16] = 1 then do
       call advance
-      if px_si[15] = 13 then ok = 1
+      if px_si[16] = 13 then ok = 1
     end
   end
-  else if px_si[15] = 2 then do
-    do while px_si[15] = 2
+  else if px_si[16] = 2 then do
+    do while px_si[16] = 2
       call advance
-      if px_si[15] = 1 then call advance
+      if px_si[16] = 1 then call advance
       else leave
     end
-    if px_si[15] = 13 then ok = 1
+    if px_si[16] = 13 then ok = 1
   end
   call lex_reset m
   return ok
@@ -1453,39 +1454,42 @@ top_item: procedure = .void
   st = .int
   n = .int
   e = .int
-  if px_si[15] = 1 & px_ss[7] == "Eval" then do
+  if px_si[16] = 1 & px_ss[7] == "Eval" then do
     call peek_tok
-    if px_si[22] = 13 then do
+    if px_si[23] = 13 then do
       call advance
       call advance
+      px_si[10] = 1
       do forever
-        do while px_si[15] = 17
+        do while px_si[16] = 17
           call advance
         end
-        if px_si[15] = 14 | px_si[15] = 0 | px_si[14] = 1 then leave
+        if px_si[16] = 14 | px_si[16] = 0 | px_si[15] = 1 then leave
         if isbin("|") = 1 | isbin("||") = 1 then do
           n = parse_temps()
           iterate
         end
         st = parse_statement()
-        if px_si[14] = 0 then call run_doit st
-        if px_si[15] = 17 then call advance
+        if px_si[15] = 0 then call run_doit st
+        if px_si[16] = 17 then call advance
       end
-      if px_si[15] = 14 then call advance
+      if px_si[16] = 14 then call advance
+      px_si[10] = 0
+      call run_scheduler
       return
     end
   end
-  if px_si[15] = 1 then do
+  if px_si[16] = 1 then do
     m = lex_mark()
     nme = px_ss[7]
     call advance
-    if px_si[15] = 2 & px_ss[7] == "subclass:" then do
+    if px_si[16] = 2 & px_ss[7] == "subclass:" then do
       call advance
-      if px_si[15] = 1 then do
+      if px_si[16] = 1 then do
         sup = nme
         nme = px_ss[7]
         call advance
-        if px_si[15] = 13 then do
+        if px_si[16] = 13 then do
           call lex_drop m
           call advance
           sc = find_class(sup)
@@ -1499,9 +1503,9 @@ top_item: procedure = .void
         end
       end
     end
-    else if px_si[15] = 1 & px_ss[7] == "extend" then do
+    else if px_si[16] = 1 & px_ss[7] == "extend" then do
       call advance
-      if px_si[15] = 13 then do
+      if px_si[16] = 13 then do
         call lex_drop m
         call advance
         cn = find_class(nme)
@@ -1513,11 +1517,11 @@ top_item: procedure = .void
         return
       end
     end
-    else if px_si[15] = 1 & px_ss[7] == "class" then do
+    else if px_si[16] = 1 & px_ss[7] == "class" then do
       call advance
-      if px_si[15] = 1 & px_ss[7] == "extend" then do
+      if px_si[16] = 1 & px_ss[7] == "extend" then do
         call advance
-        if px_si[15] = 13 then do
+        if px_si[16] = 13 then do
           call lex_drop m
           call advance
           cn = find_class(nme)
@@ -1542,7 +1546,7 @@ top_item: procedure = .void
           return
         end
       end
-      else if px_si[15] = 13 then do
+      else if px_si[16] = 13 then do
         call lex_drop m
         call advance
         cn = find_class(nme)
@@ -1574,7 +1578,7 @@ top_item: procedure = .void
     return
   end
   st = parse_statement()
-  if px_si[14] = 0 then call run_doit st
+  if px_si[15] = 0 then call run_doit st
   return
 
 /* ---------------------------------------------------------------------
@@ -1599,59 +1603,59 @@ file_in: procedure = .void
   sv_pkp = .int
   sv_pe = .int
   sv_txt = px_ss[5]
-  sv_tp = px_si[12]
-  sv_len = px_si[13]
+  sv_tp = px_si[13]
+  sv_len = px_si[14]
   sv_name = px_ss[6]
-  sv_tk = px_si[15]
+  sv_tk = px_si[16]
   sv_ts = px_ss[7]
-  sv_ti = px_si[16]
+  sv_ti = px_si[17]
   sv_tf = px_sf[1]
-  sv_tpos = px_si[17]
-  sv_pkh = px_si[21]
-  sv_pkt = px_si[22]
+  sv_tpos = px_si[18]
+  sv_pkh = px_si[22]
+  sv_pkt = px_si[23]
   sv_pks = px_ss[9]
-  sv_pki = px_si[23]
+  sv_pki = px_si[24]
   sv_pkf = px_sf[3]
-  sv_pkp = px_si[24]
-  sv_pe = px_si[14]
+  sv_pkp = px_si[25]
+  sv_pe = px_si[15]
   px_ss[5] = text
-  px_si[12] = 1
-  px_si[13] = length(text)
+  px_si[13] = 1
+  px_si[14] = length(text)
   px_ss[6] = name
-  px_si[21] = 0
-  px_si[14] = 0
+  px_si[22] = 0
+  px_si[15] = 0
   call advance
-  do while px_si[15] \= 0 & px_si[2] = 0
-    px_si[14] = 0
-    if px_si[15] = 17 | px_si[15] = 20 then do
+  do while px_si[16] \= 0 & px_si[2] = 0
+    px_si[15] = 0
+    if px_si[16] = 17 | px_si[16] = 20 then do
       call advance
       iterate
     end
     call top_item
-    if px_si[14] = 1 then do
+    if px_si[15] = 1 then do
       /* resynchronise at the next statement end */
-      do while px_si[15] \= 0 & px_si[15] \= 17 & px_si[15] \= 20
+      do while px_si[16] \= 0 & px_si[16] \= 17 & px_si[16] \= 20
         call advance
       end
     end
-    else if px_si[15] = 17 | px_si[15] = 20 then call advance
+    else if px_si[16] = 17 | px_si[16] = 20 then call advance
   end
   px_ss[5] = sv_txt
-  px_si[12] = sv_tp
-  px_si[13] = sv_len
+  px_si[13] = sv_tp
+  px_si[14] = sv_len
   px_ss[6] = sv_name
-  px_si[15] = sv_tk
+  px_si[16] = sv_tk
   px_ss[7] = sv_ts
-  px_si[16] = sv_ti
+  px_si[17] = sv_ti
   px_sf[1] = sv_tf
-  px_si[17] = sv_tpos
-  px_si[21] = sv_pkh
-  px_si[22] = sv_pkt
+  px_si[18] = sv_tpos
+  px_si[22] = sv_pkh
+  px_si[23] = sv_pkt
   px_ss[9] = sv_pks
-  px_si[23] = sv_pki
+  px_si[24] = sv_pki
   px_sf[3] = sv_pkf
-  px_si[24] = sv_pkp
-  px_si[14] = sv_pe
+  px_si[25] = sv_pkp
+  px_si[15] = sv_pe
   return
 
 read_file: procedure = .string
@@ -1759,13 +1763,13 @@ repl_loop: procedure = .void
 declare_var: procedure = .int
   arg nme = .string
   s = .int
-  s = px_env[(px_si[33])*5+3]
-  px_env[(px_si[33])*5+3] = s + 1
-  if s + 1 > px_env[(px_si[33])*5+4] then px_env[(px_si[33])*5+4] = s + 1
-  px_si[32] = px_si[32] + 1
-  px_str[(px_si[32])*8+4] = nme
-  px_env[(px_si[32])*5+1] = s
-  px_env[(px_si[32])*5+2] = px_si[33]
+  s = px_env[(px_si[34])*5+3]
+  px_env[(px_si[34])*5+3] = s + 1
+  if s + 1 > px_env[(px_si[34])*5+4] then px_env[(px_si[34])*5+4] = s + 1
+  px_si[33] = px_si[33] + 1
+  px_str[(px_si[33])*8+4] = nme
+  px_env[(px_si[33])*5+1] = s
+  px_env[(px_si[33])*5+2] = px_si[34]
   return s
 
 /* sets rv_kind (1 local, 2 ivar, 3 global cell), rv_a, rv_b */
@@ -1773,28 +1777,28 @@ lookup_var: procedure = .void
   arg nme = .string
   k = .int
   w = .int
-  do k = px_si[32] to 1 by -1
+  do k = px_si[33] to 1 by -1
     if px_str[k*8+4] == nme then do
-      px_si[39] = 1
-      px_si[40] = px_si[33] - px_env[k*5+2]
-      px_si[41] = px_env[k*5+1]
+      px_si[40] = 1
+      px_si[41] = px_si[34] - px_env[k*5+2]
+      px_si[42] = px_env[k*5+1]
       return
     end
   end
-  w = wordpos(nme, px_str[(px_si[34])*8+6])
+  w = wordpos(nme, px_str[(px_si[35])*8+6])
   if w > 0 then do
-    px_si[39] = 2
-    px_si[40] = w - 1
+    px_si[40] = 2
+    px_si[41] = w - 1
     return
   end
-  k = find_cvar(px_si[34], nme)
+  k = find_cvar(px_si[35], nme)
   if k > 0 then do
-    px_si[39] = 3
-    px_si[40] = k
+    px_si[40] = 3
+    px_si[41] = k
     return
   end
-  px_si[39] = 3
-  px_si[40] = gcell(nme)
+  px_si[40] = 3
+  px_si[41] = gcell(nme)
   return
 
 rs_list: procedure = .void
@@ -1817,19 +1821,19 @@ inline_block: procedure = .int
   sv = .int
   i = .int
   body = .int
-  sv = px_si[32]
+  sv = px_si[33]
   first = -1
   do i = 0 to px_node[b*6+4] - 1
-    px_si[38] = declare_var(px_str[(px_node[b*6+3] + i)*8+3])
-    if first < 0 then first = px_si[38]
+    px_si[39] = declare_var(px_str[(px_node[b*6+3] + i)*8+3])
+    if first < 0 then first = px_si[39]
   end
   do i = 0 to px_node[b*6+6] - 1
-    px_si[38] = declare_var(px_str[(px_node[b*6+5] + i)*8+3])
+    px_si[39] = declare_var(px_str[(px_node[b*6+5] + i)*8+3])
   end
   body = px_node[b*6+2]
   call rs_seq body
-  px_si[32] = sv
-  px_si[37] = first
+  px_si[33] = sv
+  px_si[38] = first
   return body
 
 is_blk: procedure = .int
@@ -1865,54 +1869,54 @@ rs: procedure = .int
       if nme == "self" | nme == "super" then px_node[n*6+1] = 2
       else do
         call lookup_var nme
-        if px_si[39] = 1 then do
+        if px_si[40] = 1 then do
           px_node[n*6+1] = 3
-          px_node[n*6+2] = px_si[40]
-          px_node[n*6+3] = px_si[41]
+          px_node[n*6+2] = px_si[41]
+          px_node[n*6+3] = px_si[42]
         end
-        else if px_si[39] = 2 then do
+        else if px_si[40] = 2 then do
           px_node[n*6+1] = 4
-          px_node[n*6+2] = px_si[40]
+          px_node[n*6+2] = px_si[41]
         end
         else do
           px_node[n*6+1] = 5
-          px_node[n*6+2] = px_si[40]
+          px_node[n*6+2] = px_si[41]
         end
       end
     end
     when t = 41 then do
       px_node[n*6+4] = rs(px_node[n*6+2])
       call lookup_var n_s[n]
-      if px_si[39] = 1 then do
+      if px_si[40] = 1 then do
         px_node[n*6+1] = 6
-        px_node[n*6+2] = px_si[40]
-        px_node[n*6+3] = px_si[41]
+        px_node[n*6+2] = px_si[41]
+        px_node[n*6+3] = px_si[42]
       end
-      else if px_si[39] = 2 then do
+      else if px_si[40] = 2 then do
         px_node[n*6+1] = 7
-        px_node[n*6+2] = px_si[40]
+        px_node[n*6+2] = px_si[41]
       end
       else do
         px_node[n*6+1] = 8
-        px_node[n*6+2] = px_si[40]
+        px_node[n*6+2] = px_si[41]
       end
     end
     when t = 45 then do
       px_node[n*6+2] = rs(px_node[n*6+2])
       px_node[n*6+1] = 13
-      if px_si[33] > 1 then px_node[n*6+6] = 1
+      if px_si[34] > 1 then px_node[n*6+6] = 1
       else px_node[n*6+6] = 0
     end
     when t = 14 then call rs_seq n
     when t = 15 then call rs_list px_node[n*6+2], px_node[n*6+3]
     when t = 44 then do
       /* a real block: its own scope level */
-      sv = px_si[32]
-      px_env[(px_si[33])*5+5] = 1
-      px_si[33] = px_si[33] + 1
-      px_env[(px_si[33])*5+3] = 0
-      px_env[(px_si[33])*5+4] = 0
-      px_env[(px_si[33])*5+5] = 0
+      sv = px_si[33]
+      px_env[(px_si[34])*5+5] = 1
+      px_si[34] = px_si[34] + 1
+      px_env[(px_si[34])*5+3] = 0
+      px_env[(px_si[34])*5+4] = 0
+      px_env[(px_si[34])*5+5] = 0
       do i = 0 to px_node[n*6+4] - 1
         k = declare_var(px_str[(px_node[n*6+3] + i)*8+3])
       end
@@ -1922,10 +1926,10 @@ rs: procedure = .int
       call rs_seq px_node[n*6+2]
       px_node[n*6+1] = 12
       px_node[n*6+3] = px_node[n*6+4]
-      px_node[n*6+4] = px_env[(px_si[33])*5+4]
-      px_node[n*6+5] = px_env[(px_si[33])*5+5]
-      px_si[33] = px_si[33] - 1
-      px_si[32] = sv
+      px_node[n*6+4] = px_env[(px_si[34])*5+4]
+      px_node[n*6+5] = px_env[(px_si[34])*5+5]
+      px_si[34] = px_si[34] - 1
+      px_si[33] = sv
     end
     when t = 43 then do
       px_node[n*6+2] = rs(px_node[n*6+2])
@@ -2042,7 +2046,7 @@ inline_send: procedure = .int
     px_node[n*6+2] = rs(rcv)
     px_node[n*6+3] = rs(a1)
     px_node[n*6+4] = inline_block(a2)
-    px_node[n*6+6] = px_si[37]
+    px_node[n*6+6] = px_si[38]
     px_node[n*6+5] = 0
     px_node[n*6+1] = 22
     return 1
@@ -2052,7 +2056,7 @@ inline_send: procedure = .int
     px_node[n*6+3] = rs(a1)
     st = rs(a2)
     px_node[n*6+4] = inline_block(a3)
-    px_node[n*6+6] = px_si[37]
+    px_node[n*6+6] = px_si[38]
     px_node[n*6+5] = st
     px_node[n*6+1] = 22
     return 1
@@ -2071,7 +2075,7 @@ inline_send: procedure = .int
     px_node[n*6+3] = 0
     px_node[n*6+4] = inline_block(a1)
     px_node[n*6+6] = -1
-    if px_node[a1*6+4] = 1 then px_node[n*6+6] = px_si[37]
+    if px_node[a1*6+4] = 1 then px_node[n*6+6] = px_si[38]
     px_node[n*6+5] = 0
     px_node[n*6+1] = 26
     return 1
@@ -2083,7 +2087,7 @@ inline_send: procedure = .int
     c = inline_block(a2)
     px_node[n*6+4] = c
     px_node[n*6+6] = -1
-    if px_node[a2*6+4] = 1 then px_node[n*6+6] = px_si[37]
+    if px_node[a2*6+4] = 1 then px_node[n*6+6] = px_si[38]
     px_node[n*6+5] = 0
     px_node[n*6+1] = 26
     return 1
@@ -2093,7 +2097,7 @@ inline_send: procedure = .int
     c = inline_block(a1)
     px_node[n*6+4] = c
     px_node[n*6+6] = -1
-    if px_node[a1*6+4] = 1 then px_node[n*6+6] = px_si[37]
+    if px_node[a1*6+4] = 1 then px_node[n*6+6] = px_si[38]
     px_node[n*6+3] = inline_block(a2)
     px_node[n*6+5] = 0
     px_node[n*6+1] = 26
@@ -2106,9 +2110,9 @@ inline_send: procedure = .int
    --------------------------------------------------------------------- */
 start_scope: procedure = .void
   arg c = .int
-  px_si[34] = c
-  px_si[32] = 0
-  px_si[33] = 1
+  px_si[35] = c
+  px_si[33] = 0
+  px_si[34] = 1
   px_env[1*5+3] = 0
   px_env[1*5+4] = 0
   px_env[1*5+5] = 0
@@ -2140,10 +2144,10 @@ run_doit: procedure = .void
   v = .int
   eb = .int
   er = .int
-  call start_scope px_si[57]
-  px_si[31] = px_si[31] + 1
-  al[px_si[31]] = st
-  seq = nd(14, px_si[31], 1, 0, 0, 0, "")
+  call start_scope px_si[58]
+  px_si[32] = px_si[32] + 1
+  al[px_si[32]] = st
+  seq = nd(14, px_si[32], 1, 0, 0, 0, "")
   call rs_seq seq
   fb = alloc_frame(4 + px_env[1*5+4])
   vp[fb + 0] = 0
@@ -2151,25 +2155,26 @@ run_doit: procedure = .void
   vp[fb + 2] = 2
   vp[fb + 3] = 0
   call init_temps fb + 4, px_env[1*5+4]
-  px_si[65] = 0
-  px_si[67] = 0
-  px_si[70] = 0
+  px_si[66] = 0
+  px_si[68] = 0
+  px_si[71] = 0
   v = ev(seq, fb)
-  if px_si[9] = 1 & px_si[67] = 0 & v \= 2 then do
+  if px_si[68] = 0 & px_si[10] = 0 then call run_scheduler
+  if px_si[9] = 1 & px_si[68] = 0 & v \= 2 then do
     if cof(v) \= find_class("TextCollector") then do
-      eb = px_si[64]
+      eb = px_si[65]
       er = send_sel(v, 22, eb, 0)
-      px_si[64] = eb
-      if px_si[67] = 0 & isstr(er) = 1 then call outs o_s[er % 2] || '0a'x
+      px_si[65] = eb
+      if px_si[68] = 0 & isstr(er) = 1 then call outs o_s[er % 2] || '0a'x
       else call outs printstr0(v) || '0a'x
-      px_si[67] = 0
+      px_si[68] = 0
     end
   end
-  if px_si[67] > 0 then do
-    if px_si[67] = 6 then px_si[2] = 1
-    px_si[67] = 0
+  if px_si[68] > 0 then do
+    if px_si[68] = 6 then px_si[2] = 1
+    px_si[68] = 0
   end
-  px_si[70] = 0
+  px_si[71] = 0
   return
 
 /* evaluate an expression node in the context of a class (class variable initialisers) */
@@ -2179,9 +2184,9 @@ eval_in_class: procedure = .int
   fb = .int
   v = .int
   call start_scope c
-  px_si[31] = px_si[31] + 1
-  al[px_si[31]] = e
-  seq = nd(14, px_si[31], 1, 0, 0, 0, "")
+  px_si[32] = px_si[32] + 1
+  al[px_si[32]] = e
+  seq = nd(14, px_si[32], 1, 0, 0, 0, "")
   call rs_seq seq
   fb = alloc_frame(4 + px_env[1*5+4])
   vp[fb + 0] = 0
@@ -2190,8 +2195,27 @@ eval_in_class: procedure = .int
   vp[fb + 3] = 0
   call init_temps fb + 4, px_env[1*5+4]
   v = ev(seq, fb)
-  if px_si[67] > 0 then px_si[67] = 0
+  if px_si[68] > 0 then px_si[68] = 0
   return v
+
+/* give forked Smalltalk processes a chance to run at the end of a statement */
+run_scheduler: procedure = .void
+  g = .string
+  pr = .int
+  r = .int
+  eb = .int
+  g = gmap["Processor"]
+  if g == "" then return
+  pr = g_val[g as .int]
+  if pr = 2 then return
+  eb = px_si[65]
+  r = send_sel(pr, 51, eb, 0)
+  px_si[65] = eb
+  if px_si[68] > 0 then do
+    if px_si[68] = 6 then px_si[2] = 1
+    px_si[68] = 0
+  end
+  return
 
 
 /* ---------------------------------------------------------------------
@@ -2208,19 +2232,19 @@ intval: procedure = .int
 newobj: procedure = .int
   arg cls = .int, kind = .int, n = .int
   i = .int
-  px_si[42] = px_si[42] + 1
-  px_obj[(px_si[42])*5+1] = cls
-  px_obj[(px_si[42])*5+2] = kind
-  px_obj[(px_si[42])*5+3] = n
-  px_obj[(px_si[42])*5+5] = 0
-  o_s[px_si[42]] = ""
-  o_f[px_si[42]] = 0.0
-  px_obj[(px_si[42])*5+4] = px_si[43] + 1
+  px_si[43] = px_si[43] + 1
+  px_obj[(px_si[43])*5+1] = cls
+  px_obj[(px_si[43])*5+2] = kind
+  px_obj[(px_si[43])*5+3] = n
+  px_obj[(px_si[43])*5+5] = 0
+  o_s[px_si[43]] = ""
+  o_f[px_si[43]] = 0.0
+  px_obj[(px_si[43])*5+4] = px_si[44] + 1
   do i = 1 to n
-    px_si[43] = px_si[43] + 1
-    sl[px_si[43]] = 2
+    px_si[44] = px_si[44] + 1
+    sl[px_si[44]] = 2
   end
-  return px_si[42] * 2
+  return px_si[43] * 2
 
 slot_get: procedure = .int
   arg o = .int, i = .int
@@ -2234,7 +2258,7 @@ slot_put: procedure = .void
 mkstr: procedure = .int
   arg s = .string
   o = .int
-  o = newobj(px_si[48], 1, 0)
+  o = newobj(px_si[49], 1, 0)
   o_s[o % 2] = s
   return o
 
@@ -2244,7 +2268,7 @@ mksym: procedure = .int
   v = .string
   v = symtab[s]
   if v \== "" then return v as .int
-  o = newobj(px_si[49], 2, 0)
+  o = newobj(px_si[50], 2, 0)
   o_s[o % 2] = s
   symtab[s] = o
   return o
@@ -2252,7 +2276,7 @@ mksym: procedure = .int
 mkfloat: procedure = .int
   arg f = .float
   o = .int
-  o = newobj(px_si[50], 3, 0)
+  o = newobj(px_si[51], 3, 0)
   o_f[o % 2] = f
   return o
 
@@ -2261,7 +2285,7 @@ mkchar: procedure = .int
   o = .int
   if code < 0 | code > 255 then code = 63
   if chr_oop[code + 1] = 0 then do
-    o = newobj(px_si[51], 5, 0)
+    o = newobj(px_si[52], 5, 0)
     px_obj[(o % 2)*5+5] = code
     chr_oop[code + 1] = o
   end
@@ -2269,7 +2293,7 @@ mkchar: procedure = .int
 
 mkarray: procedure = .int
   arg n = .int
-  return newobj(px_si[52], 4, n)
+  return newobj(px_si[53], 4, n)
 
 mkbool: procedure = .int
   arg b = .int
@@ -2279,7 +2303,7 @@ mkbool: procedure = .int
 /* class number of any oop */
 cof: procedure = .int
   arg x = .int
-  if x // 2 \= 0 then return px_si[53]
+  if x // 2 \= 0 then return px_si[54]
   return px_obj[(x % 2)*5+1]
 
 kindof: procedure = .int
@@ -2310,11 +2334,11 @@ gcell: procedure = .int
   v = .string
   v = gmap[nme]
   if v \== "" then return v as .int
-  px_si[61] = px_si[61] + 1
-  g_val[px_si[61]] = 2
-  px_str[(px_si[61])*8+7] = nme
-  gmap[nme] = px_si[61]
-  return px_si[61]
+  px_si[62] = px_si[62] + 1
+  g_val[px_si[62]] = 2
+  px_str[(px_si[62])*8+7] = nme
+  gmap[nme] = px_si[62]
+  return px_si[62]
 
 gset: procedure = .void
   arg nme = .string, v = .int
@@ -2328,18 +2352,18 @@ selid: procedure = .int
   p = .int
   v = selmap[nme]
   if v \== "" then return v as .int
-  px_si[62] = px_si[62] + 1
-  if px_si[62] >= 2048 then do
+  px_si[63] = px_si[63] + 1
+  if px_si[63] >= 2048 then do
     call outs "too many selectors" || '0a'x
     return 1
   end
-  px_str[(px_si[62])*8+8] = nme
+  px_str[(px_si[63])*8+8] = nme
   n = 0
   if isletter(left(nme, 1)) = 1 then n = length(nme) - length(translate(nme, "", ":"))
   else n = 1
-  sel_n[px_si[62]] = n
-  selmap[nme] = px_si[62]
-  return px_si[62]
+  sel_n[px_si[63]] = n
+  selmap[nme] = px_si[63]
+  return px_si[63]
 
 /* ---------------------------------------------------------------------
    Classes
@@ -2354,8 +2378,8 @@ find_class: procedure = .int
 mkclassrec: procedure = .int
   arg nme = .string, sup = .int
   c = .int
-  px_si[44] = px_si[44] + 1
-  c = px_si[44]
+  px_si[45] = px_si[45] + 1
+  c = px_si[45]
   px_str[c*8+5] = nme
   px_cls[c*8+1] = sup
   px_cls[c*8+2] = 0
@@ -2387,7 +2411,7 @@ define_class: procedure = .int
       /* the program redefines a library class: start from a clean slate */
       px_cls[c*8+7] = 0
       m = px_cls[c*8+2]
-      do i = 1 to px_si[62]
+      do i = 1 to px_si[63]
         cm[c * 2048 + i] = 0
         cm[m * 2048 + i] = 0
       end
@@ -2399,7 +2423,7 @@ define_class: procedure = .int
         px_str[c*8+6] = ""
         px_cls[c*8+6] = 0
       end
-      px_si[60] = px_si[60] + 1
+      px_si[61] = px_si[61] + 1
     end
     if px_cls[c*8+1] \= sup then do
       px_cls[c*8+1] = sup
@@ -2409,13 +2433,13 @@ define_class: procedure = .int
         px_cls[c*8+5] = px_cls[sup*8+5]
         px_cls[(px_cls[c*8+2])*8+1] = px_cls[sup*8+2]
       end
-      px_si[60] = px_si[60] + 1
+      px_si[61] = px_si[61] + 1
     end
     return c
   end
   c = mkclassrec(nme, sup)
   if sup > 0 then msup = px_cls[sup*8+2]
-  else msup = px_si[46]
+  else msup = px_si[47]
   m = mkclassrec(nme || " class", msup)
   px_cls[m*8+3] = 1
   px_cls[m*8+4] = c
@@ -2432,12 +2456,12 @@ define_class: procedure = .int
   o = newobj(m, 9, px_cls[m*8+6])
   px_obj[(o % 2)*5+5] = c
   px_cls[c*8+8] = o
-  o = newobj(px_si[47], 10, 0)
+  o = newobj(px_si[48], 10, 0)
   px_obj[(o % 2)*5+5] = m
   px_cls[m*8+8] = o
   cmap[nme] = c
   call gset nme, px_cls[c*8+8]
-  if nme == "Class" then px_si[46] = c
+  if nme == "Class" then px_si[47] = c
   return c
 
 add_ivar: procedure = .void
@@ -2448,11 +2472,11 @@ add_ivar: procedure = .void
   oldn = words(px_str[c*8+6])
   px_str[c*8+6] = strip(px_str[c*8+6] || " " || nme)
   px_cls[c*8+6] = oldn + 1
-  do k = 1 to px_si[44]
+  do k = 1 to px_si[45]
     if px_cls[k*8+1] = c then call ivar_inherit k, oldn, c
   end
   /* class-side variables: grow the slots of the class objects */
-  do k = 1 to px_si[44]
+  do k = 1 to px_si[45]
     if px_cls[k*8+3] = 1 & px_cls[(px_cls[k*8+4])*8+8] > 0 then do
       if inherits(k, c) = 1 then call grow_class_slots px_cls[k*8+4]
     end
@@ -2469,7 +2493,7 @@ ivar_inherit: procedure = .void
   if kold > oldn then own = subword(px_str[k*8+6], oldn + 1)
   px_str[k*8+6] = strip(px_str[parent*8+6] || " " || own)
   px_cls[k*8+6] = words(px_str[k*8+6])
-  do j = 1 to px_si[44]
+  do j = 1 to px_si[45]
     if px_cls[j*8+1] = k then call ivar_inherit j, kold, k
   end
   return
@@ -2487,14 +2511,14 @@ grow_class_slots: procedure = .void
   have = px_obj[o*5+3]
   if need <= have then return
   old = px_obj[o*5+4]
-  base = px_si[43] + 1
+  base = px_si[44] + 1
   do i = 0 to have - 1
-    px_si[43] = px_si[43] + 1
-    sl[px_si[43]] = sl[old + i]
+    px_si[44] = px_si[44] + 1
+    sl[px_si[44]] = sl[old + i]
   end
   do i = have + 1 to need
-    px_si[43] = px_si[43] + 1
-    sl[px_si[43]] = 2
+    px_si[44] = px_si[44] + 1
+    sl[px_si[44]] = 2
   end
   px_obj[o*5+4] = base
   px_obj[o*5+3] = need
@@ -2506,8 +2530,8 @@ grow_class_slots: procedure = .void
 install_method: procedure = .int
   arg c = .int, sel = .int, nargs = .int, body = .int, ntemps = .int, hasblk = .int, prim = .int
   m = .int
-  px_si[59] = px_si[59] + 1
-  m = px_si[59]
+  px_si[60] = px_si[60] + 1
+  m = px_si[60]
   px_meth[m*8+1] = sel
   px_meth[m*8+2] = c
   px_meth[m*8+3] = nargs
@@ -2516,7 +2540,7 @@ install_method: procedure = .int
   px_meth[m*8+6] = hasblk
   px_meth[m*8+7] = prim
   cm[c * 2048 + sel] = m
-  px_si[60] = px_si[60] + 1
+  px_si[61] = px_si[61] + 1
   return m
 
 lookup: procedure = .int
@@ -2525,7 +2549,7 @@ lookup: procedure = .int
   k = .int
   m = .int
   i = c * 2048 + sel
-  if lkg[i] = px_si[60] then return lk[i]
+  if lkg[i] = px_si[61] then return lk[i]
   m = 0
   k = c
   do while k > 0
@@ -2534,7 +2558,7 @@ lookup: procedure = .int
     k = px_cls[k*8+1]
   end
   lk[i] = m
-  lkg[i] = px_si[60]
+  lkg[i] = px_si[61]
   return m
 
 /* is class c a subclass of (or equal to) d ? */
@@ -2571,11 +2595,11 @@ define_classvar: procedure = .void
   if px_cls[c*8+3] = 1 then c = px_cls[c*8+4]
   cell = find_cvar(c, nme)
   if cell = 0 | cvmap[c || "." || nme] == "" then do
-    px_si[61] = px_si[61] + 1
-    g_val[px_si[61]] = 2
-    px_str[(px_si[61])*8+7] = nme
-    cvmap[c || "." || nme] = px_si[61]
-    cell = px_si[61]
+    px_si[62] = px_si[62] + 1
+    g_val[px_si[62]] = 2
+    px_str[(px_si[62])*8+7] = nme
+    cvmap[c || "." || nme] = px_si[62]
+    cell = px_si[62]
   end
   v = eval_in_class(c, e)
   g_val[cell] = v
@@ -2593,8 +2617,8 @@ alloc_frame: procedure = .int
     fl_head[size] = vp[fb]
     return fb
   end
-  fb = px_si[63] + 1
-  px_si[63] = px_si[63] + size
+  fb = px_si[64] + 1
+  px_si[64] = px_si[64] + size
   return fb
 
 free_frame: procedure = .void
@@ -2626,7 +2650,7 @@ print_trace: procedure = .void
   sg0 = .int
   mc = .int
   sg0 = find_class("Signal")
-  do i = px_si[65] to 1 by -1
+  do i = px_si[66] to 1 by -1
     mc = px_meth[(px_h[i*5+1])*8+2]
     if px_cls[mc*8+3] = 1 then mc = px_cls[mc*8+4]
     if sg0 = 0 | inherits(mc, sg0) = 0 then call outs trace_line(px_h[i*5+1], px_h[i*5+2]) || '0a'x
@@ -2639,11 +2663,11 @@ st_error: procedure = .void
   arg rcv = .int, msg = .string
   base = .int
   r = .int
-  base = px_si[64]
-  px_si[64] = px_si[64] + 1
-  ast[px_si[64]] = mkstr(msg)
+  base = px_si[65]
+  px_si[65] = px_si[65] + 1
+  ast[px_si[65]] = mkstr(msg)
   r = send_sel(rcv, 50, base, 1)
-  px_si[64] = base
+  px_si[65] = base
   return
 
 /* perform a send whose arguments are already at ast[base+1 .. base+na] */
@@ -2663,31 +2687,31 @@ send_dnu: procedure = .int
   i = .int
   m = .int
   b2 = .int
-  if px_si[66] > 50 then do
+  if px_si[67] > 50 then do
     call outs "doesNotUnderstand: recursion for #" || px_str[sel*8+8] || '0a'x
-    px_si[67] = 5
+    px_si[68] = 5
     return 0
   end
   arr = mkarray(na)
   do i = 1 to na
     call slot_put arr, i - 1, ast[base + i]
   end
-  msg = newobj(px_si[58], 0, 2)
+  msg = newobj(px_si[59], 0, 2)
   call slot_put msg, 0, mksym(px_str[sel*8+8])
   call slot_put msg, 1, arr
   m = lookup(cof(rcv), 21)
   if m = 0 then do
     call outs "Object: " || printstr0(rcv) || " error: did not understand #" || px_str[sel*8+8] || '0a'x
-    px_si[67] = 5
+    px_si[68] = 5
     return 0
   end
-  b2 = px_si[64]
-  px_si[64] = px_si[64] + 1
-  ast[px_si[64]] = msg
-  px_si[66] = px_si[66] + 1
+  b2 = px_si[65]
+  px_si[65] = px_si[65] + 1
+  ast[px_si[65]] = msg
+  px_si[67] = px_si[67] + 1
   i = invoke(m, rcv, b2, 1)
-  px_si[66] = px_si[66] - 1
-  px_si[64] = b2
+  px_si[67] = px_si[67] - 1
+  px_si[65] = b2
   return i
 
 printstr0: procedure = .string
@@ -2716,7 +2740,7 @@ invoke: procedure = .int
   p = px_meth[m*8+7]
   if p > 0 then do
     r = prim(p, rcv, base, na)
-    if px_si[67] > 0 then return 0
+    if px_si[68] > 0 then return 0
     if r \= 0 then return r
     if px_node[(px_meth[m*8+4])*6+3] = 0 then do
       call st_error rcv, "primitive failed: " || px_str[(px_meth[m*8+1])*8+8]
@@ -2728,8 +2752,8 @@ invoke: procedure = .int
   nf = fl_head[size]
   if nf > 0 then fl_head[size] = vp[nf]
   else do
-    nf = px_si[63] + 1
-    px_si[63] = px_si[63] + size
+    nf = px_si[64] + 1
+    px_si[64] = px_si[64] + size
   end
   vp[nf] = 0
   vp[nf + 1] = nf
@@ -2741,22 +2765,22 @@ invoke: procedure = .int
   do i = px_meth[m*8+3] + 1 to nt0
     vp[nf + 3 + i] = 2
   end
-  px_si[65] = px_si[65] + 1
-  if px_si[65] > 20000 then do
+  px_si[66] = px_si[66] + 1
+  if px_si[66] > 20000 then do
     call outs "call stack too deep" || '0a'x
-    px_si[65] = px_si[65] - 1
-    px_si[67] = 5
+    px_si[66] = px_si[66] - 1
+    px_si[68] = 5
     return 0
   end
-  px_h[(px_si[65])*5+1] = m
-  px_h[(px_si[65])*5+2] = rcv
+  px_h[(px_si[66])*5+1] = m
+  px_h[(px_si[66])*5+2] = rcv
   r = ev(px_meth[m*8+4], nf)
-  px_si[65] = px_si[65] - 1
-  if px_si[67] = 1 & px_si[68] = nf then do
-    px_si[67] = 0
-    r = px_si[69]
+  px_si[66] = px_si[66] - 1
+  if px_si[68] = 1 & px_si[69] = nf then do
+    px_si[68] = 0
+    r = px_si[70]
   end
-  else if px_si[67] = 0 then r = rcv
+  else if px_si[68] = 0 then r = rcv
   else r = 0
   if px_meth[m*8+6] = 0 then do
     vp[nf] = fl_head[size]
@@ -2786,8 +2810,8 @@ call_block: procedure = .int
   bf = fl_head[size]
   if bf > 0 then fl_head[size] = vp[bf]
   else do
-    bf = px_si[63] + 1
-    px_si[63] = px_si[63] + size
+    bf = px_si[64] + 1
+    px_si[64] = px_si[64] + size
   end
   vp[bf] = outer
   vp[bf + 1] = vp[outer + 1]
@@ -2804,13 +2828,13 @@ call_block: procedure = .int
     vp[bf] = fl_head[size]
     fl_head[size] = bf
   end
-  if px_si[67] > 0 then return 0
+  if px_si[68] > 0 then return 0
   return r
 
 /* value of a block with no arguments */
 block0: procedure = .int
   arg blk = .int
-  return call_block(blk, px_si[64], 0)
+  return call_block(blk, px_si[65], 0)
 
 /* ---------------------------------------------------------------------
    The evaluator
@@ -2858,7 +2882,7 @@ ev_slow: procedure = .int
     when t = 5 then return g_val[px_node[n*6+2]]
     when t = 6 then do
       v = ev(px_node[n*6+4], fb)
-      if px_si[67] > 0 then return 0
+      if px_si[68] > 0 then return 0
       d = px_node[n*6+2]
       f = fb
       do while d > 0
@@ -2870,13 +2894,13 @@ ev_slow: procedure = .int
     end
     when t = 7 then do
       v = ev(px_node[n*6+4], fb)
-      if px_si[67] > 0 then return 0
+      if px_si[68] > 0 then return 0
       sl[px_obj[(vp[fb + 2] % 2)*5+4] + px_node[n*6+2]] = v
       return v
     end
     when t = 8 then do
       v = ev(px_node[n*6+4], fb)
-      if px_si[67] > 0 then return 0
+      if px_si[68] > 0 then return 0
       g_val[px_node[n*6+2]] = v
       return v
     end
@@ -2890,22 +2914,22 @@ ev_slow: procedure = .int
         else if ev_t = 2 then v = vp[fb + 2]
         else if ev_t = 3 & px_node[ev_n*6+2] = 0 then v = vp[fb + 4 + px_node[ev_n*6+3]]
         else v = ev(ev_n, fb)
-        if px_si[67] > 0 then return 0
+        if px_si[68] > 0 then return 0
       end
       return v
     end
     when t = 13 then do
       v = ev(px_node[n*6+2], fb)
-      if px_si[67] > 0 then return 0
+      if px_si[68] > 0 then return 0
       f = vp[fb + 1]
       if px_node[n*6+6] = 1 & (f = 0 | vp[f + 1] \= f) then do
         call outs "BlockContext>>cannotReturn: non-local return from a dead method context" || '0a'x
-        px_si[67] = 5
+        px_si[68] = 5
         return 0
       end
-      px_si[67] = 1
-      px_si[68] = f
-      px_si[69] = v
+      px_si[68] = 1
+      px_si[69] = f
+      px_si[70] = v
       return 0
     end
     when t = 20 then do
@@ -2915,7 +2939,7 @@ ev_slow: procedure = .int
       else if ev_t = 2 then v = vp[fb + 2]
       else if ev_t = 3 & px_node[ev_n*6+2] = 0 then v = vp[fb + 4 + px_node[ev_n*6+3]]
       else v = ev(ev_n, fb)
-      if px_si[67] > 0 then return 0
+      if px_si[68] > 0 then return 0
       if v = 4 then do
         if px_node[n*6+3] > 0 then return ev(px_node[n*6+3], fb)
         return 2
@@ -2929,21 +2953,21 @@ ev_slow: procedure = .int
     when t = 21 then do
       do forever
         v = ev(px_node[n*6+2], fb)
-        if px_si[67] > 0 then return 0
+        if px_si[68] > 0 then return 0
         if v = 4 then c = 1
         else if v = 6 then c = 0
         else return not_boolean(v, "whileTrue:")
         if c \= px_node[n*6+6] then leave
         if px_node[n*6+3] > 0 then do
           v = ev(px_node[n*6+3], fb)
-          if px_si[67] > 0 then return 0
+          if px_si[68] > 0 then return 0
         end
       end
       return 2
     end
     when t = 24 | t = 25 then do
       v = ev(px_node[n*6+2], fb)
-      if px_si[67] > 0 then return 0
+      if px_si[68] > 0 then return 0
       if v = 4 then do
         if t = 24 then return ev(px_node[n*6+3], fb)
         return 4
@@ -2957,18 +2981,18 @@ ev_slow: procedure = .int
     when t = 22 then return do_todo(n, fb)
     when t = 23 then do
       v = ev(px_node[n*6+2], fb)
-      if px_si[67] > 0 then return 0
+      if px_si[68] > 0 then return 0
       if v // 2 = 0 then return not_number(v, "timesRepeat:")
       lim = intval(v)
       do i = 1 to lim
         c = ev(px_node[n*6+3], fb)
-        if px_si[67] > 0 then return 0
+        if px_si[68] > 0 then return 0
       end
       return v
     end
     when t = 26 then do
       v = ev(px_node[n*6+2], fb)
-      if px_si[67] > 0 then return 0
+      if px_si[68] > 0 then return 0
       if v = 2 then do
         if px_node[n*6+3] > 0 then return ev(px_node[n*6+3], fb)
         return 2
@@ -2982,13 +3006,13 @@ ev_slow: procedure = .int
     when t = 27 then do
       do forever
         v = ev(px_node[n*6+2], fb)
-        if px_si[67] > 0 then return 0
+        if px_si[68] > 0 then return 0
       end
       return 2
     end
     when t = 10 then return do_cascade(n, fb)
     when t = 12 then do
-      v = newobj(px_si[56], 6, 0)
+      v = newobj(px_si[57], 6, 0)
       px_obj[(v % 2)*5+5] = n
       px_obj[(v % 2)*5+4] = fb
       return v
@@ -2998,7 +3022,7 @@ ev_slow: procedure = .int
       v = mkarray(c)
       do i = 0 to c - 1
         f = ev(al[px_node[n*6+2] + i], fb)
-        if px_si[67] > 0 then return 0
+        if px_si[68] > 0 then return 0
         sl[px_obj[(v % 2)*5+4] + i] = f
       end
       return v
@@ -3038,14 +3062,14 @@ do_todo: procedure = .int
   else if ev_t = 2 then a = vp[fb + 2]
   else if ev_t = 3 & px_node[ev_n*6+2] = 0 then a = vp[fb + 4 + px_node[ev_n*6+3]]
   else a = ev(ev_n, fb)
-  if px_si[67] > 0 then return 0
+  if px_si[68] > 0 then return 0
   ev_n = px_node[n*6+3]
   ev_t = px_node[ev_n*6+1]
   if ev_t = 1 then b = px_node[ev_n*6+2]
   else if ev_t = 2 then b = vp[fb + 2]
   else if ev_t = 3 & px_node[ev_n*6+2] = 0 then b = vp[fb + 4 + px_node[ev_n*6+3]]
   else b = ev(ev_n, fb)
-  if px_si[67] > 0 then return 0
+  if px_si[68] > 0 then return 0
   if px_node[n*6+5] > 0 then do
     ev_n = px_node[n*6+5]
     ev_t = px_node[ev_n*6+1]
@@ -3053,7 +3077,7 @@ do_todo: procedure = .int
     else if ev_t = 2 then st = vp[fb + 2]
     else if ev_t = 3 & px_node[ev_n*6+2] = 0 then st = vp[fb + 4 + px_node[ev_n*6+3]]
     else st = ev(ev_n, fb)
-    if px_si[67] > 0 then return 0
+    if px_si[68] > 0 then return 0
   end
   else st = mkint(1)
   slot = fb + 4 + px_node[n*6+6]
@@ -3069,7 +3093,7 @@ do_todo: procedure = .int
       do while x <= y
         vp[slot] = mkint(x)
         v = ev(px_node[n*6+4], fb)
-        if px_si[67] > 0 then return 0
+        if px_si[68] > 0 then return 0
         x = x + s
       end
     end
@@ -3077,31 +3101,31 @@ do_todo: procedure = .int
       do while x >= y
         vp[slot] = mkint(x)
         v = ev(px_node[n*6+4], fb)
-        if px_si[67] > 0 then return 0
+        if px_si[68] > 0 then return 0
         x = x + s
       end
     end
     return a
   end
   /* general numbers: use sends */
-  base = px_si[64]
+  base = px_si[65]
   v = a
   do forever
-    px_si[64] = base + 1
-    ast[px_si[64]] = b
+    px_si[65] = base + 1
+    ast[px_si[65]] = b
     if is_neg(st) = 0 then r = send_sel(v, 9, base, 1)
     else r = send_sel(v, 10, base, 1)
-    px_si[64] = base
-    if px_si[67] > 0 then return 0
+    px_si[65] = base
+    if px_si[68] > 0 then return 0
     if r \= 4 then leave
     vp[slot] = v
     r = ev(px_node[n*6+4], fb)
-    if px_si[67] > 0 then return 0
-    px_si[64] = base + 1
-    ast[px_si[64]] = st
+    if px_si[68] > 0 then return 0
+    px_si[65] = base + 1
+    ast[px_si[65]] = st
     v = send_sel(v, 1, base, 1)
-    px_si[64] = base
-    if px_si[67] > 0 then return 0
+    px_si[65] = base
+    if px_si[68] > 0 then return 0
   end
   return a
 
@@ -3127,23 +3151,23 @@ do_cascade: procedure = .int
   r = .int
   f = .int
   rcv = ev(px_node[n*6+2], fb)
-  if px_si[67] > 0 then return 0
+  if px_si[68] > 0 then return 0
   r = 2
   do i = px_node[n*6+3] to px_node[n*6+3] + px_node[n*6+4] - 1
     k = al[i]
-    base = px_si[64]
+    base = px_si[65]
     do j = 0 to px_node[k*6+6] - 1
       v = ev(al[px_node[k*6+3] + j], fb)
-      if px_si[67] > 0 then do
-        px_si[64] = base
+      if px_si[68] > 0 then do
+        px_si[65] = base
         return 0
       end
-      px_si[64] = px_si[64] + 1
-      ast[px_si[64]] = v
+      px_si[65] = px_si[65] + 1
+      ast[px_si[65]] = v
     end
     r = send_sel(rcv, px_node[k*6+4], base, px_node[k*6+6])
-    px_si[64] = base
-    if px_si[67] > 0 then return 0
+    px_si[65] = base
+    if px_si[68] > 0 then return 0
   end
   return r
 
@@ -3170,7 +3194,7 @@ do_send: procedure = .int
   if px_node[n*6+5] = 1 then do
     rcv = vp[fb + 2]
     c = px_cls[(px_meth[(vp[fb + 3])*8+2])*8+1]
-    if c = 0 then c = px_si[45]
+    if c = 0 then c = px_si[46]
   end
   else do
     ev_n = rn
@@ -3179,10 +3203,10 @@ do_send: procedure = .int
     else if ev_t = 2 then rcv = vp[fb + 2]
     else if ev_t = 3 & px_node[ev_n*6+2] = 0 then rcv = vp[fb + 4 + px_node[ev_n*6+3]]
     else rcv = ev(ev_n, fb)
-    if px_si[67] > 0 then return 0
+    if px_si[68] > 0 then return 0
     c = 0
   end
-  base = px_si[64]
+  base = px_si[65]
   f = px_node[n*6+3]
   do i = 0 to na - 1
     ev_n = al[f + i]
@@ -3191,16 +3215,16 @@ do_send: procedure = .int
     else if ev_t = 2 then v = vp[fb + 2]
     else if ev_t = 3 & px_node[ev_n*6+2] = 0 then v = vp[fb + 4 + px_node[ev_n*6+3]]
     else v = ev(ev_n, fb)
-    if px_si[67] > 0 then do
-      px_si[64] = base
+    if px_si[68] > 0 then do
+      px_si[65] = base
       return 0
     end
-    px_si[64] = px_si[64] + 1
-    ast[px_si[64]] = v
+    px_si[65] = px_si[65] + 1
+    ast[px_si[65]] = v
   end
   /* fast paths for SmallInteger arithmetic and comparison */
   if na = 1 & sel <= 14 then do
-    v = ast[px_si[64]]
+    v = ast[px_si[65]]
     if rcv // 2 \= 0 & v // 2 \= 0 then do
       x = intval(rcv)
       y = intval(v)
@@ -3208,50 +3232,50 @@ do_send: procedure = .int
         when sel = 1 then do
           r = x + y
           if r > -1000000000000000000 & r < 1000000000000000000 then do
-            px_si[64] = base
+            px_si[65] = base
             return r * 2 + 1
           end
         end
         when sel = 2 then do
           r = x - y
           if r > -1000000000000000000 & r < 1000000000000000000 then do
-            px_si[64] = base
+            px_si[65] = base
             return r * 2 + 1
           end
         end
         when sel = 3 then do
           if x > -1000000000 & x < 1000000000 & y > -1000000000 & y < 1000000000 then do
-            px_si[64] = base
+            px_si[65] = base
             return (x * y) * 2 + 1
           end
         end
         when sel = 7 then do
-          px_si[64] = base
+          px_si[65] = base
           if x < y then return 4
           return 6
         end
         when sel = 8 then do
-          px_si[64] = base
+          px_si[65] = base
           if x > y then return 4
           return 6
         end
         when sel = 9 then do
-          px_si[64] = base
+          px_si[65] = base
           if x <= y then return 4
           return 6
         end
         when sel = 10 then do
-          px_si[64] = base
+          px_si[65] = base
           if x >= y then return 4
           return 6
         end
         when sel = 11 then do
-          px_si[64] = base
+          px_si[65] = base
           if x = y then return 4
           return 6
         end
         when sel = 12 then do
-          px_si[64] = base
+          px_si[65] = base
           if x \= y then return 4
           return 6
         end
@@ -3259,7 +3283,7 @@ do_send: procedure = .int
           if y \= 0 then do
             r = x % y
             if (x // y \= 0) & ((x < 0) \= (y < 0)) then r = r - 1
-            px_si[64] = base
+            px_si[65] = base
             return r * 2 + 1
           end
         end
@@ -3267,7 +3291,7 @@ do_send: procedure = .int
           if y \= 0 then do
             r = x // y
             if r \= 0 & ((r < 0) \= (y < 0)) then r = r + y
-            px_si[64] = base
+            px_si[65] = base
             return r * 2 + 1
           end
         end
@@ -3275,12 +3299,12 @@ do_send: procedure = .int
       end
     end
     if sel = 13 then do
-      px_si[64] = base
+      px_si[65] = base
       if rcv = v then return 4
       return 6
     end
     if sel = 14 then do
-      px_si[64] = base
+      px_si[65] = base
       if rcv = v then return 6
       return 4
     end
@@ -3289,7 +3313,7 @@ do_send: procedure = .int
   m = lookup(c, sel)
   if m = 0 then r = send_dnu(rcv, sel, base, na)
   else r = invoke(m, rcv, base, na)
-  px_si[64] = base
+  px_si[65] = base
   return r
 
 /* thisContext: a chain of Context objects built from the call stack */
@@ -3302,7 +3326,7 @@ make_context: procedure = .int
   cc = find_class("Context")
   if cc = 0 then return 2
   prev = 2
-  do i = 1 to px_si[65]
+  do i = 1 to px_si[66]
     o = new_instance(cc, 0)
     s0 = px_obj[(o % 2)*5+4]
     sl[s0] = px_h[i*5+2]
@@ -3526,8 +3550,8 @@ dict_new: procedure = .int
   arg c = .int
   o = .int
   d = .int
-  px_si[73] = px_si[73] + 1
-  d = px_si[73]
+  px_si[74] = px_si[74] + 1
+  d = px_si[74]
   px_dd[d*7+1] = 0
   px_dd[d*7+2] = 0
   px_dd[d*7+3] = 0
@@ -3552,16 +3576,16 @@ dict_put: procedure = .void
     return
   end
   d = px_obj[(o % 2)*5+5]
-  px_si[74] = px_si[74] + 1
-  px_dd[(px_si[74])*7+4] = key
-  px_dd[(px_si[74])*7+5] = val
-  px_dd[(px_si[74])*7+6] = 0
-  px_dd[(px_si[74])*7+7] = 1
-  if px_dd[d*7+2] = 0 then px_dd[d*7+1] = px_si[74]
-  else px_dd[(px_dd[d*7+2])*7+6] = px_si[74]
-  px_dd[d*7+2] = px_si[74]
+  px_si[75] = px_si[75] + 1
+  px_dd[(px_si[75])*7+4] = key
+  px_dd[(px_si[75])*7+5] = val
+  px_dd[(px_si[75])*7+6] = 0
+  px_dd[(px_si[75])*7+7] = 1
+  if px_dd[d*7+2] = 0 then px_dd[d*7+1] = px_si[75]
+  else px_dd[(px_dd[d*7+2])*7+6] = px_si[75]
+  px_dd[d*7+2] = px_si[75]
   px_dd[d*7+3] = px_dd[d*7+3] + 1
-  dmap[d || "|" || dkey(key)] = px_si[74]
+  dmap[d || "|" || dkey(key)] = px_si[75]
   return
 
 dict_remove: procedure = .int
@@ -3606,8 +3630,8 @@ do_signal: procedure = .int
   base = .int
   m = .int
   if fresh = 1 then do
-    px_si[72] = px_si[72] + 1
-    sig = px_si[72]
+    px_si[73] = px_si[73] + 1
+    sig = px_si[73]
     call slot_put ex, 2, mkint(sig)
   end
   else sig = intval(slot_get(ex, 2))
@@ -3620,35 +3644,35 @@ do_signal: procedure = .int
   end
   if k = 0 then do
     /* unhandled */
-    base = px_si[64]
+    base = px_si[65]
     v = send_sel(ex, 27, base, 0)
-    px_si[64] = base
-    if px_si[67] > 0 then return 0
+    px_si[65] = base
+    if px_si[68] > 0 then return 0
     return v
   end
-  oldtop = px_si[70]
-  px_si[70] = k - 1
+  oldtop = px_si[71]
+  px_si[71] = k - 1
   call slot_put ex, 1, mkint(k)
   hb = px_h[k*5+4]
-  base = px_si[64]
+  base = px_si[65]
   if px_node[(px_obj[(hb % 2)*5+5])*6+3] = 0 then v = call_block(hb, base, 0)
   else do
-    px_si[64] = px_si[64] + 1
-    ast[px_si[64]] = ex
+    px_si[65] = px_si[65] + 1
+    ast[px_si[65]] = ex
     v = call_block(hb, base, 1)
-    px_si[64] = base
+    px_si[65] = base
   end
-  px_si[70] = oldtop
-  if px_si[67] = 0 then do
+  px_si[71] = oldtop
+  if px_si[68] = 0 then do
     /* the handler block completed: return its value from on:do: */
-    px_si[67] = 2
-    px_si[68] = px_h[k*5+5]
-    px_si[69] = v
+    px_si[68] = 2
+    px_si[69] = px_h[k*5+5]
+    px_si[70] = v
     return 0
   end
-  if px_si[67] = 4 & px_si[68] = sig then do
-    px_si[67] = 0
-    return px_si[69]
+  if px_si[68] = 4 & px_si[69] = sig then do
+    px_si[68] = 0
+    return px_si[70]
   end
   return 0
 
@@ -3762,20 +3786,20 @@ prim_a: procedure = .int
         do i = 2 to na
           ast[base + i - 1] = ast[base + i]
         end
-        px_si[64] = base + na - 1
+        px_si[65] = base + na - 1
         r = send_sel(rcv, k, base, na - 1)
-        px_si[64] = base
+        px_si[65] = base
         return r
       end
       if a2 // 2 \= 0 then return 0
       c = px_obj[(a2 % 2)*5+3]
-      px_si[64] = base
+      px_si[65] = base
       do i = 0 to c - 1
-        px_si[64] = px_si[64] + 1
-        ast[px_si[64]] = sl[px_obj[(a2 % 2)*5+4] + i]
+        px_si[65] = px_si[65] + 1
+        ast[px_si[65]] = sl[px_obj[(a2 % 2)*5+4] + i]
       end
       r = send_sel(rcv, k, base, c)
-      px_si[64] = base
+      px_si[65] = base
       return r
     end
     when p = 26 then do
@@ -4428,13 +4452,13 @@ prim_c: procedure = .int
         call st_error rcv, "wrong argument count"
         return 0
       end
-      b2 = px_si[64]
+      b2 = px_si[65]
       do i = 0 to n - 1
-        px_si[64] = px_si[64] + 1
-        ast[px_si[64]] = sl[px_obj[(a1 % 2)*5+4] + px_cls[(px_obj[(a1 % 2)*5+1])*8+6] + i]
+        px_si[65] = px_si[65] + 1
+        ast[px_si[65]] = sl[px_obj[(a1 % 2)*5+4] + px_cls[(px_obj[(a1 % 2)*5+1])*8+6] + i]
       end
       r = call_block(rcv, b2, n)
-      px_si[64] = b2
+      px_si[65] = b2
       return r
     end
     when p = 90 then do
@@ -4444,13 +4468,13 @@ prim_c: procedure = .int
     when p = 91 | p = 92 then do
       if kindof(rcv) \= 6 then return 0
       do forever
-        v = call_block(rcv, px_si[64], 0)
-        if px_si[67] > 0 then return 0
+        v = call_block(rcv, px_si[65], 0)
+        if px_si[68] > 0 then return 0
         if p = 91 & v \= 4 then leave
         if p = 92 & v \= 6 then leave
         if na >= 1 then do
-          v = call_block(a1, px_si[64], 0)
-          if px_si[67] > 0 then return 0
+          v = call_block(a1, px_si[65], 0)
+          if px_si[68] > 0 then return 0
         end
       end
       return 2
@@ -4458,81 +4482,81 @@ prim_c: procedure = .int
     when p = 93 then do
       /* rcv on: exceptionClass do: handlerBlock */
       if kindof(rcv) \= 6 then return 0
-      oldtop = px_si[70]
+      oldtop = px_si[71]
       do forever
-        px_si[71] = px_si[71] + 1
-        id = px_si[71]
-        px_si[70] = oldtop + 1
-        px_h[(px_si[70])*5+3] = a1
-        px_h[(px_si[70])*5+4] = a2
-        px_h[(px_si[70])*5+5] = id
-        v = call_block(rcv, px_si[64], 0)
-        px_si[70] = oldtop
-        if px_si[67] = 2 & px_si[68] = id then do
-          px_si[67] = 0
-          return px_si[69]
+        px_si[72] = px_si[72] + 1
+        id = px_si[72]
+        px_si[71] = oldtop + 1
+        px_h[(px_si[71])*5+3] = a1
+        px_h[(px_si[71])*5+4] = a2
+        px_h[(px_si[71])*5+5] = id
+        v = call_block(rcv, px_si[65], 0)
+        px_si[71] = oldtop
+        if px_si[68] = 2 & px_si[69] = id then do
+          px_si[68] = 0
+          return px_si[70]
         end
-        if px_si[67] = 3 & px_si[68] = id then do
-          px_si[67] = 0
+        if px_si[68] = 3 & px_si[69] = id then do
+          px_si[68] = 0
           iterate
         end
-        if px_si[67] > 0 then return 0
+        if px_si[68] > 0 then return 0
         return v
       end
     end
     when p = 94 | p = 95 then do
       if kindof(rcv) \= 6 then return 0
-      v = call_block(rcv, px_si[64], 0)
-      if p = 95 & px_si[67] = 0 then return v
-      sv_u = px_si[67]
-      sv_t = px_si[68]
-      sv_v = px_si[69]
-      oldtop = px_si[70]
-      px_si[67] = 0
-      r = call_block(a1, px_si[64], 0)
-      px_si[70] = oldtop
-      if px_si[67] = 0 then do
-        px_si[67] = sv_u
-        px_si[68] = sv_t
-        px_si[69] = sv_v
+      v = call_block(rcv, px_si[65], 0)
+      if p = 95 & px_si[68] = 0 then return v
+      sv_u = px_si[68]
+      sv_t = px_si[69]
+      sv_v = px_si[70]
+      oldtop = px_si[71]
+      px_si[68] = 0
+      r = call_block(a1, px_si[65], 0)
+      px_si[71] = oldtop
+      if px_si[68] = 0 then do
+        px_si[68] = sv_u
+        px_si[69] = sv_t
+        px_si[70] = sv_v
       end
-      if px_si[67] > 0 then return 0
+      if px_si[68] > 0 then return 0
       return v
     end
-    when p = 96 then return do_signal(rcv, px_si[70], 1)
+    when p = 96 then return do_signal(rcv, px_si[71], 1)
     when p = 97 then do
       /* rcv resume: value */
-      px_si[67] = 4
-      px_si[68] = intval(slot_get(rcv, 2))
-      px_si[69] = a1
+      px_si[68] = 4
+      px_si[69] = intval(slot_get(rcv, 2))
+      px_si[70] = a1
       return 0
     end
     when p = 98 then do
       k = intval(slot_get(rcv, 1))
-      if k < 1 | k > px_si[70] + 50 then do
+      if k < 1 | k > px_si[71] + 50 then do
         call st_error rcv, "return: outside of a handler"
         return 0
       end
-      px_si[67] = 2
-      px_si[68] = px_h[k*5+5]
-      px_si[69] = a1
+      px_si[68] = 2
+      px_si[69] = px_h[k*5+5]
+      px_si[70] = a1
       return 0
     end
     when p = 99 then do
       k = intval(slot_get(rcv, 1))
-      px_si[67] = 3
-      px_si[68] = px_h[k*5+5]
-      px_si[69] = 2
+      px_si[68] = 3
+      px_si[69] = px_h[k*5+5]
+      px_si[70] = 2
       return 0
     end
     when p = 100 | p = 101 then do
       k = intval(slot_get(rcv, 1))
       v = do_signal(rcv, k - 1, 0)
-      if px_si[67] > 0 then return 0
+      if px_si[68] > 0 then return 0
       if p = 100 then do
-        px_si[67] = 2
-        px_si[68] = px_h[k*5+5]
-        px_si[69] = v
+        px_si[68] = 2
+        px_si[69] = px_h[k*5+5]
+        px_si[70] = v
         return 0
       end
       return v
@@ -4565,12 +4589,12 @@ prim_c: procedure = .int
     when p = 108 then do
       k = px_obj[(rcv % 2)*5+5]
       n = 0
-      do i = 1 to px_si[62]
+      do i = 1 to px_si[63]
         if cm[k * 2048 + i] > 0 then n = n + 1
       end
       r = mkarray(n)
       j = 0
-      do i = 1 to px_si[62]
+      do i = 1 to px_si[63]
         if cm[k * 2048 + i] > 0 then do
           sl[px_obj[(r % 2)*5+4] + j] = mksym(px_str[i*8+8])
           j = j + 1
@@ -4589,10 +4613,10 @@ prim_c: procedure = .int
       k = px_obj[(rcv % 2)*5+5]
       if px_cls[k*8+3] = 1 then k = px_cls[k*8+4]
       if cvmap[k || "." || s] == "" then do
-        px_si[61] = px_si[61] + 1
-        g_val[px_si[61]] = 2
-        px_str[(px_si[61])*8+7] = s
-        cvmap[k || "." || s] = px_si[61]
+        px_si[62] = px_si[62] + 1
+        g_val[px_si[62]] = 2
+        px_str[(px_si[62])*8+7] = s
+        cvmap[k || "." || s] = px_si[62]
       end
       return rcv
     end
@@ -4604,12 +4628,12 @@ prim_c: procedure = .int
     when p = 114 then do
       k = px_obj[(rcv % 2)*5+5]
       n = 0
-      do i = 1 to px_si[44]
+      do i = 1 to px_si[45]
         if px_cls[i*8+1] = k & px_cls[i*8+3] = 0 then n = n + 1
       end
       r = mkarray(n)
       j = 0
-      do i = 1 to px_si[44]
+      do i = 1 to px_si[45]
         if px_cls[i*8+1] = k & px_cls[i*8+3] = 0 then do
           sl[px_obj[(r % 2)*5+4] + j] = px_cls[i*8+8]
           j = j + 1
@@ -4653,12 +4677,12 @@ prim_c: procedure = .int
     when p = 137 then return mkint(0)
     when p = 123 then do
       call outs "halt" || '0a'x
-      px_si[67] = 5
+      px_si[68] = 5
       return 0
     end
     when p = 124 then do
       if a1 // 2 \= 0 then px_si[1] = intval(a1)
-      px_si[67] = 6
+      px_si[68] = 6
       return 0
     end
     when p = 126 then return mkbool(rcv = 2)
@@ -4680,7 +4704,7 @@ prim_c: procedure = .int
     when p = 130 then do
       /* a1: 1 = print trace and abort, 2 = print trace only */
       call print_trace
-      if a1 \= mkint(2) then px_si[67] = 5
+      if a1 \= mkint(2) then px_si[68] = 5
       return 2
     end
     when p = 138 then do
@@ -4695,11 +4719,11 @@ prim_c: procedure = .int
       end
       return mkfloat(px_si[7] as .float / 2147483648.0)
     end
-    when p = 145 then return mkint(px_si[10])
+    when p = 145 then return mkint(px_si[11])
     when p = 146 then do
       if a1 // 2 = 0 then return 0
       ak = intval(a1)
-      if ak < 1 | ak > px_si[10] then return 0
+      if ak < 1 | ak > px_si[11] then return 0
       return mkstr(sargs[ak])
     end
     when p = 147 then do
@@ -4751,7 +4775,7 @@ prim_c: procedure = .int
       if isstr(a1) = 0 then return 0
       return mkstr(run_command(o_s[a1 % 2]))
     end
-    when p = 158 then return mkint(px_si[11])
+    when p = 158 then return mkint(px_si[12])
     when p = 159 then return mkstr(px_ss[2])
     when p = 143 then do
       if a1 // 2 = 0 then return 0
@@ -4821,36 +4845,36 @@ eval_string: procedure = .int
   sv_cls = .int
   sv_nx = .int
   sv_txt = px_ss[5]
-  sv_tp = px_si[12]
-  sv_len = px_si[13]
-  sv_tk = px_si[15]
+  sv_tp = px_si[13]
+  sv_len = px_si[14]
+  sv_tk = px_si[16]
   sv_ts = px_ss[7]
-  sv_ti = px_si[16]
+  sv_ti = px_si[17]
   sv_tf = px_sf[1]
-  sv_tpos = px_si[17]
-  sv_pkh = px_si[21]
-  sv_pkt = px_si[22]
+  sv_tpos = px_si[18]
+  sv_pkh = px_si[22]
+  sv_pkt = px_si[23]
   sv_pks = px_ss[9]
-  sv_pki = px_si[23]
+  sv_pki = px_si[24]
   sv_pkf = px_sf[3]
-  sv_pkp = px_si[24]
-  sv_pe = px_si[14]
-  sv_lvl = px_si[33]
-  sv_envn = px_si[32]
-  sv_cls = px_si[34]
+  sv_pkp = px_si[25]
+  sv_pe = px_si[15]
+  sv_lvl = px_si[34]
+  sv_envn = px_si[33]
+  sv_cls = px_si[35]
   sv_nx = px_env[1*5+4]
   px_ss[5] = text
-  px_si[12] = 1
-  px_si[13] = length(text)
-  px_si[21] = 0
-  px_si[14] = 0
+  px_si[13] = 1
+  px_si[14] = length(text)
+  px_si[22] = 0
+  px_si[15] = 0
   call advance
-  px_si[28] = 0
-  if isbin("|") = 1 then px_si[28] = parse_temps()
+  px_si[29] = 0
+  if isbin("|") = 1 then px_si[29] = parse_temps()
   seq = parse_stmts(0)
   v = 2
-  if px_si[14] = 0 then do
-    call start_scope px_si[57]
+  if px_si[15] = 0 then do
+    call start_scope px_si[58]
     call rs_seq seq
     fb = alloc_frame(4 + px_env[1*5+4])
     vp[fb] = 0
@@ -4859,30 +4883,30 @@ eval_string: procedure = .int
     vp[fb + 3] = 0
     call init_temps fb + 4, px_env[1*5+4]
     v = ev(seq, fb)
-    if px_si[67] = 1 then do
-      px_si[67] = 0
-      v = px_si[69]
+    if px_si[68] = 1 then do
+      px_si[68] = 0
+      v = px_si[70]
     end
-    if px_si[67] > 0 then v = 2
+    if px_si[68] > 0 then v = 2
   end
   px_ss[5] = sv_txt
-  px_si[12] = sv_tp
-  px_si[13] = sv_len
-  px_si[15] = sv_tk
+  px_si[13] = sv_tp
+  px_si[14] = sv_len
+  px_si[16] = sv_tk
   px_ss[7] = sv_ts
-  px_si[16] = sv_ti
+  px_si[17] = sv_ti
   px_sf[1] = sv_tf
-  px_si[17] = sv_tpos
-  px_si[21] = sv_pkh
-  px_si[22] = sv_pkt
+  px_si[18] = sv_tpos
+  px_si[22] = sv_pkh
+  px_si[23] = sv_pkt
   px_ss[9] = sv_pks
-  px_si[23] = sv_pki
+  px_si[24] = sv_pki
   px_sf[3] = sv_pkf
-  px_si[24] = sv_pkp
-  px_si[14] = sv_pe
-  px_si[33] = sv_lvl
-  px_si[32] = sv_envn
-  px_si[34] = sv_cls
+  px_si[25] = sv_pkp
+  px_si[15] = sv_pe
+  px_si[34] = sv_lvl
+  px_si[33] = sv_envn
+  px_si[35] = sv_cls
   return v
 
 file_ok: procedure = .int
@@ -4920,7 +4944,7 @@ run_command: procedure = .string
   i = .int
   res = ""
   address command cmd output outl error errl
-  px_si[11] = rc
+  px_si[12] = rc
   do i = 1 to outl.0
     if i > 1 then res = res || '0a'x
     res = res || outl[i]
@@ -5210,11 +5234,11 @@ mag_divmod: procedure = .void
 sgn_split: procedure = .void
   arg s = .string
   if left(s, 1) == "-" then do
-    px_si[75] = -1
+    px_si[76] = -1
     px_ss[12] = substr(s, 2)
   end
   else do
-    px_si[75] = 1
+    px_si[76] = 1
     px_ss[12] = s
   end
   return
@@ -5233,10 +5257,10 @@ sadd: procedure = .string
   mb = .string
   c = .int
   call sgn_split a
-  sa = px_si[75]
+  sa = px_si[76]
   ma = px_ss[12]
   call sgn_split b
-  sb = px_si[75]
+  sb = px_si[76]
   mb = px_ss[12]
   if sa = sb then return sgn_make(sa, mag_add(ma, mb))
   c = mag_cmp(ma, mb)
@@ -5261,10 +5285,10 @@ smul: procedure = .string
   ma = .string
   mb = .string
   call sgn_split a
-  sa = px_si[75]
+  sa = px_si[76]
   ma = px_ss[12]
   call sgn_split b
-  sb = px_si[75]
+  sb = px_si[76]
   mb = px_ss[12]
   return sgn_make(sa * sb, mag_mul(ma, mb))
 
@@ -5276,10 +5300,10 @@ sdivmod: procedure = .void
   ma = .string
   mb = .string
   call sgn_split a
-  sa = px_si[75]
+  sa = px_si[76]
   ma = px_ss[12]
   call sgn_split b
-  sb = px_si[75]
+  sb = px_si[76]
   mb = px_ss[12]
   call mag_divmod ma, mb
   px_ss[13] = sgn_make(sa * sb, px_ss[10])
@@ -5293,10 +5317,10 @@ scmp: procedure = .int
   ma = .string
   mb = .string
   call sgn_split a
-  sa = px_si[75]
+  sa = px_si[76]
   ma = px_ss[12]
   call sgn_split b
-  sb = px_si[75]
+  sb = px_si[76]
   mb = px_ss[12]
   if ma == "0" then sa = 0
   if mb == "0" then sb = 0
@@ -5337,8 +5361,8 @@ mkbig: procedure = .int
   o = .int
   if length(s) <= 18 & left(s, 1) \== "-" then return mkint(s as .int)
   if length(s) <= 19 & left(s, 1) == "-" then return mkint(0 - (substr(s, 2) as .int))
-  if left(s, 1) == "-" then o = newobj(px_si[55], 7, 0)
-  else o = newobj(px_si[54], 7, 0)
+  if left(s, 1) == "-" then o = newobj(px_si[56], 7, 0)
+  else o = newobj(px_si[55], 7, 0)
   o_s[o % 2] = s
   return o
 

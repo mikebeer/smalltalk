@@ -48,3 +48,4 @@ S_PRINTNL printNl
 S_EXECSTMT executeStatements
 S_MUSTBEBOOLEAN mustBeBoolean
 S_ERROR error:
+S_RUNPENDING runPending
