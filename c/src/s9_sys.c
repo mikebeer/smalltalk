@@ -845,12 +845,21 @@ static oop prim_c(int p, oop rcv, long base, int na)
     return 0;
 }
 
-/* ---- sockets: not available in the C port ------------------------------ */
+/* ---- sockets: not available in the C port ------------------------------
+   EXTENSION POINT.  All socket primitives (PR_SOCKNEW .. PR_SOCKSHUT, see
+   src/prims.txt and lib/net.st) are routed here by prim().  To add
+   networking implement them in this function only:
+     - POSIX build (-DST_POSIX): socket/connect/bind/listen/accept/send/recv/
+       close from <sys/socket.h>; a handle is a small integer (fd).
+     - VM/370: the TCP/IP socket API of the target stack, same primitives.
+   Until then Socket class>>primNew reports a clear error; the other
+   primitives answer 0 (failure), so net.st falls back to its -1 / '' values. */
 static oop prim_net(int p, oop rcv, long base, int na)
 {
-    (void)p;
     (void)rcv;
     (void)base;
     (void)na;
+    if (p == PR_SOCKNEW)
+        st_error(NIL_OOP, "networking is not available in this build (C port)");
     return 0;
 }
