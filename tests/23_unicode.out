@@ -1,0 +1,20 @@
+9
+20013
+128512
+true
+201
+233
+'GRÀDH 中 ☺'
+'STRASSE'
+'strasse'
+true
+'☺ 中 hdàrG'
+14
+(71 114 195 160 100 104 32 228 184 173 32 226 152 186 )
+'Gràdh 中 ☺'
+1
+2
+7
+Object: 55296 error: Invalid argument 55296: argument must be between 0 and 1114111
+Character class>>value:
+UndefinedObject>>executeStatements

@@ -160,6 +160,7 @@ PR_SYSERR sysErr
 PR_FILEINSTR fileInString
 PR_ALLINST allInstances
 PR_BECOME become
+PR_UNICODE unicode
 PR_SOCKNEW sockNew
 PR_SOCKCLOSE sockClose
 PR_SOCKCONNECT sockConnect

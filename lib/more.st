@@ -13,7 +13,26 @@ Array subclass: ByteArray [
     hex [ | s | s := WriteStream on: String new. self do: [:b | s nextPutAll: ('0123456789abcdef' at: b // 16 + 1) asString; nextPutAll: ('0123456789abcdef' at: b \\ 16 + 1) asString]. ^s contents ]
 ]
 String extend [
-    asByteArray [ | b | b := ByteArray new: self size. 1 to: self size do: [:i | b at: i put: (self at: i) value]. ^b ]
+    asByteArray [ ^self utf8Bytes ]
+    primUnicode: op with: x [ <primitive: unicode> ^self error: 'unicode operation failed' ]
+    asNFC [ ^self primUnicode: 1 with: nil ]
+    asNFD [ ^self primUnicode: 2 with: nil ]
+    asNFKC [ ^self primUnicode: 3 with: nil ]
+    asNFKD [ ^self primUnicode: 4 with: nil ]
+    asCasefold [ ^self primUnicode: 5 with: nil ]
+    graphemeSize [ ^self primUnicode: 6 with: nil ]
+    utf8Bytes [ ^self primUnicode: 9 with: nil ]
+    utf8Size [ ^self utf8Bytes size ]
+    isNormalized [ ^self asNFC = self ]
+    sameAs: aString [ ^self asCasefold asNFC = aString asCasefold asNFC ]
+]
+ByteArray extend [
+    primUnicode: op with: x [ <primitive: unicode> ^self error: 'unicode operation failed' ]
+    utf8String [ ^self primUnicode: 10 with: nil ]
+    asString [ ^self utf8String ]
+]
+String class extend [
+    fromUtf8Bytes: aByteArray [ ^aByteArray utf8String ]
 ]
 Array extend [
     asByteArray [ | b | b := ByteArray new: self size. 1 to: self size do: [:i | b at: i put: (self at: i)]. ^b ]

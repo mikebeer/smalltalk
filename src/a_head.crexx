@@ -9,6 +9,7 @@ options levelb numeric_classic
 import rxfnsb
 import rxfloat
 import rxfs
+import rxunicode
 import rxsocket
 import _rxsysb
 @@EXPOSE@@
@@ -200,6 +201,7 @@ init: procedure = .void
   symtab = .stem()
   chr_oop = .int[]
   chr_oop[256] = 0
+  chr_big = .stem()
   nil_oop = 2
   true_oop = 4
   false_oop = 6

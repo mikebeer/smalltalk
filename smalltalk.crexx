@@ -9,11 +9,13 @@ options levelb numeric_classic
 import rxfnsb
 import rxfloat
 import rxfs
+import rxunicode
 import rxsocket
 import _rxsysb
 namespace smalltalk expose px_node px_obj px_cls px_meth px_mk px_env px_dd,
    px_h px_str px_fl px_si px_ss px_sf sargs n_s al o_s o_f sl symtab,
-   chr_oop cmap cvmap cm lk lkg gmap g_val selmap sel_n vp fl_head ast dmap
+   chr_oop chr_big cmap cvmap cm lk lkg gmap g_val selmap sel_n vp fl_head,
+   ast dmap
 
 arg av = .string[]
 call init
@@ -131,7 +133,7 @@ init: procedure = .void
   sargs = .string[]
   px_si[12] = 0
   px_ss[2] = ""
-  px_ss[3] = "add sub mul div idiv mod quo rem lt gt le ge eq ne ident nident class basicSize basicAt basicAtPut instVarAt instVarAtPut identityHash perform performWithArgs isKindOf isMemberOf respondsTo shallowCopy basicNew basicNewSize floatOp truncated floor ceiling rounded asFloat bitAnd bitOr bitXor bitShift printString printRadix isInteger isFloat isString isSymbol isCharacter isNumber sqrtFloor strSize strAt strAtPut strCat strCopy strEq strLt strHash asSymbol asString upper lower strIndexOf strReplaceAll asNumber strTrim strSplit strReverse strNew charValue charFrom arrNew arrAt arrAtPut arrSize arrCopy arrFill arrReplace dictNew dictAt dictAtPut dictHas dictRemove dictKeys dictValues dictSize dictCopy blockValue blockValueArgs blockNumArgs whileTrue whileFalse onDo ensure ifCurtailed signal resume return retry pass outer retryUsing className superclass subclassNamed addInstVar instanceVariableNames selectors includesSelector basicNewClass compile addClassVar lookupSelector subclasses category globalAt globalAtPut globalHas transcript stdinLine stdinAtEnd msecs halt exit dnuArgs isNil evaluate displayString allSymbols excInfo bigOp floatPrint random strFind strCompare asStringOf secs format fileRead fileWrite dateStr timeStr randSeed getenv argCount argAt fileDelete fileRename fileKind dirCreate dirRemove dirList cwd chdir fileCopy fileSize sysCmd sysRc sysErr fileInString allInstances become sockNew sockClose sockConnect sockConnectTls sockBind sockListen sockAccept sockSend sockRecv sockPending sockTimeout sockStatus sockError sockPeer sockLocal sockNoDelay sockShutdown"
+  px_ss[3] = "add sub mul div idiv mod quo rem lt gt le ge eq ne ident nident class basicSize basicAt basicAtPut instVarAt instVarAtPut identityHash perform performWithArgs isKindOf isMemberOf respondsTo shallowCopy basicNew basicNewSize floatOp truncated floor ceiling rounded asFloat bitAnd bitOr bitXor bitShift printString printRadix isInteger isFloat isString isSymbol isCharacter isNumber sqrtFloor strSize strAt strAtPut strCat strCopy strEq strLt strHash asSymbol asString upper lower strIndexOf strReplaceAll asNumber strTrim strSplit strReverse strNew charValue charFrom arrNew arrAt arrAtPut arrSize arrCopy arrFill arrReplace dictNew dictAt dictAtPut dictHas dictRemove dictKeys dictValues dictSize dictCopy blockValue blockValueArgs blockNumArgs whileTrue whileFalse onDo ensure ifCurtailed signal resume return retry pass outer retryUsing className superclass subclassNamed addInstVar instanceVariableNames selectors includesSelector basicNewClass compile addClassVar lookupSelector subclasses category globalAt globalAtPut globalHas transcript stdinLine stdinAtEnd msecs halt exit dnuArgs isNil evaluate displayString allSymbols excInfo bigOp floatPrint random strFind strCompare asStringOf secs format fileRead fileWrite dateStr timeStr randSeed getenv argCount argAt fileDelete fileRename fileKind dirCreate dirRemove dirList cwd chdir fileCopy fileSize sysCmd sysRc sysErr fileInString allInstances become unicode sockNew sockClose sockConnect sockConnectTls sockBind sockListen sockAccept sockSend sockRecv sockPending sockTimeout sockStatus sockError sockPeer sockLocal sockNoDelay sockShutdown"
   px_ss[4] = "+ - * / // \\ < > <= >= = ~= == ~~ , value value: value:value: value:value:value: value:value:value:value: doesNotUnderstand: printString displayString printOn: hash signal defaultAction new initialize size at: at:put: do: isKindOf: messageText description next atEnd class isNil notNil lessOrEqual: -> key printString: displayNl printNl executeStatements mustBeBoolean error: runPending"
   /* ---- lexer / parser ---- */
   px_ss[5] = ""
@@ -185,6 +187,7 @@ init: procedure = .void
   symtab = .stem()
   chr_oop = .int[]
   chr_oop[256] = 0
+  chr_big = .stem()
   /* ---- classes ---- */
   px_si[45] = 0
   cmap = .stem()
@@ -2319,7 +2322,16 @@ mkfloat: procedure = .int
 mkchar: procedure = .int
   arg code = .int
   o = .int
-  if code < 0 | code > 255 then code = 63
+  v = .string
+  if code < 0 | code > 1114111 | (code >= 55296 & code <= 57343) then code = 63
+  if code > 255 then do
+    v = chr_big[code]
+    if v \== "" then return v as .int
+    o = newobj(px_si[52], 5, 0)
+    px_obj[(o % 2)*5+5] = code
+    chr_big[code] = o
+    return o
+  end
   if chr_oop[code + 1] = 0 then do
     o = newobj(px_si[52], 5, 0)
     px_obj[(o % 2)*5+5] = code
@@ -3717,7 +3729,7 @@ do_signal: procedure = .int
    --------------------------------------------------------------------- */
 prim: procedure = .int
   arg p = .int, rcv = .int, base = .int, na = .int
-  if p >= 163 then return prim_net(p, rcv, base, na)
+  if p >= 164 then return prim_net(p, rcv, base, na)
   if p < 51 then return prim_a(p, rcv, base, na)
   if p < 88 then return prim_b(p, rcv, base, na)
   return prim_c(p, rcv, base, na)
@@ -4162,13 +4174,13 @@ prim_b: procedure = .int
     end
     when p = 61 then do
       if isstr(rcv) = 0 then return 0
-      if kindof(rcv) = 2 then return mksym(upper(o_s[rcv % 2]))
-      return mkstr(upper(o_s[rcv % 2]))
+      if kindof(rcv) = 2 then return mksym(toUppercase(o_s[rcv % 2]))
+      return mkstr(toUppercase(o_s[rcv % 2]))
     end
     when p = 62 then do
       if isstr(rcv) = 0 then return 0
-      if kindof(rcv) = 2 then return mksym(lower(o_s[rcv % 2]))
-      return mkstr(lower(o_s[rcv % 2]))
+      if kindof(rcv) = 2 then return mksym(toLowercase(o_s[rcv % 2]))
+      return mkstr(toLowercase(o_s[rcv % 2]))
     end
     when p = 63 then do
       if isstr(rcv) = 0 then return 0
@@ -4234,7 +4246,7 @@ prim_b: procedure = .int
     when p = 71 then do
       if a1 // 2 = 0 then return 0
       i = intval(a1)
-      if i < 0 | i > 255 then return 0
+      if i < 0 | i > 1114111 | (i >= 55296 & i <= 57343) then return 0
       return mkchar(i)
     end
     when p = 72 then do
@@ -4462,6 +4474,7 @@ prim_c: procedure = .int
   n = .int
   o = .int
   e = .int
+  bb = .binary
   c = .int
   v = .int
   id = .int
@@ -4765,6 +4778,59 @@ prim_c: procedure = .int
       end
       return r
     end
+    when p = 163 then do
+      /* a1 = op, a2 = argument; receiver is a String/Symbol/Character/ByteArray */
+      if a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i <= 8 then do
+        if isstr(rcv) = 0 then return 0
+        s = o_s[rcv % 2]
+        if i = 1 then t = toNFC(s)
+        else if i = 2 then t = toNFD(s)
+        else if i = 3 then t = toNFKC(s)
+        else if i = 4 then t = toNFKD(s)
+        else if i = 5 then t = toCasefold(s)
+        else if i = 6 then return mkint(graphemecount(s))
+        else if i = 7 then t = toUppercase(s)
+        else t = toLowercase(s)
+        if kindof(rcv) = 2 then return mksym(t)
+        return mkstr(t)
+      end
+      if i = 9 then do
+        /* UTF-8 bytes of a string as a ByteArray */
+        if isstr(rcv) = 0 then return 0
+        s = o_s[rcv % 2]
+        bb = encode(s, "UTF-8")
+        n = 0
+        assembler blen n,bb
+        r = mkarray(n)
+        do j = 1 to n
+          k = 0
+          e = j - 1
+          assembler getbyte k,bb,e
+          call slot_put r, j - 1, mkint(k)
+        end
+        j = find_class("ByteArray")
+        if j > 0 then px_obj[(r % 2)*5+1] = j
+        return r
+      end
+      if i = 10 then do
+        /* decode a ByteArray/Array of byte values as UTF-8 */
+        if px_obj[(rcv % 2)*5+2] \= 4 then return 0
+        n = px_obj[(rcv % 2)*5+3]
+        t = ""
+        do j = 1 to n
+          k = intval(sl[px_obj[(rcv % 2)*5+4] + j - 1])
+          if k < 0 | k > 255 then return 0
+          t = t || right(d2x(k), 2, "0")
+        end
+        if n = 0 then return mkstr("")
+        bb = x2bin(t)
+        if isDecodable(bb, "UTF-8") = 0 then return 0
+        return mkstr(decode(bb, "UTF-8"))
+      end
+      return 0
+    end
     when p = 160 then do
       if isstr(a1) = 0 then return 0
       call file_in o_s[a1 % 2], "compile"
@@ -5067,46 +5133,46 @@ prim_net: procedure = .int
   a1 = ast[base + 1]
   a2 = ast[base + 2]
   a3 = ast[base + 3]
-  if p = 163 then return mkint(socketcreate())
+  if p = 164 then return mkint(socketcreate())
   if a1 // 2 = 0 then return 0
   h = intval(a1)
   select
-    when p = 164 then return mkint(socketclose(h))
-    when p = 165 | p = 166 | p = 167 then do
+    when p = 165 then return mkint(socketclose(h))
+    when p = 166 | p = 167 | p = 168 then do
       if isstr(a2) = 0 | a3 // 2 = 0 then return 0
-      if p = 165 then r = socketconnect(h, o_s[a2 % 2], intval(a3))
-      else if p = 166 then r = socketconnecttls(h, o_s[a2 % 2], intval(a3))
+      if p = 166 then r = socketconnect(h, o_s[a2 % 2], intval(a3))
+      else if p = 167 then r = socketconnecttls(h, o_s[a2 % 2], intval(a3))
       else r = socketbind(h, o_s[a2 % 2], intval(a3))
       return mkint(r)
     end
-    when p = 168 then do
+    when p = 169 then do
       if a2 // 2 = 0 then return 0
       return mkint(socketlisten(h, intval(a2)))
     end
-    when p = 169 then return mkint(socketaccept(h))
-    when p = 170 then do
+    when p = 170 then return mkint(socketaccept(h))
+    when p = 171 then do
       if isstr(a2) = 0 then return 0
       return mkint(socketsend(h, o_s[a2 % 2]))
     end
-    when p = 171 then do
+    when p = 172 then do
       if a2 // 2 = 0 then return 0
       s = socketrecv(h, intval(a2))
       return mkstr(s)
     end
-    when p = 172 then return mkint(socketpending(h))
-    when p = 173 then do
+    when p = 173 then return mkint(socketpending(h))
+    when p = 174 then do
       if a2 // 2 = 0 then return 0
       return mkint(sockettimeout(h, intval(a2)))
     end
-    when p = 174 then return mkint(socketstatus(h))
-    when p = 175 then return mkstr(socketerror(h))
-    when p = 176 then return mkstr(socketpeer(h))
-    when p = 177 then return mkstr(socketlocal(h))
-    when p = 178 then do
+    when p = 175 then return mkint(socketstatus(h))
+    when p = 176 then return mkstr(socketerror(h))
+    when p = 177 then return mkstr(socketpeer(h))
+    when p = 178 then return mkstr(socketlocal(h))
+    when p = 179 then do
       if a2 // 2 = 0 then return 0
       return mkint(socketnodelay(h, intval(a2)))
     end
-    when p = 179 then do
+    when p = 180 then do
       if a2 // 2 = 0 then return 0
       return mkint(socketshutdown(h, intval(a2)))
     end

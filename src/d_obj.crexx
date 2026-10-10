@@ -64,7 +64,16 @@ mkfloat: procedure = .int
 mkchar: procedure = .int
   arg code = .int
   o = .int
-  if code < 0 | code > 255 then code = 63
+  v = .string
+  if code < 0 | code > 1114111 | (code >= 55296 & code <= 57343) then code = 63
+  if code > 255 then do
+    v = chr_big[code]
+    if v \== "" then return v as .int
+    o = newobj(cls_Character, KD_CHR, 0)
+    o_x[o % 2] = code
+    chr_big[code] = o
+    return o
+  end
   if chr_oop[code + 1] = 0 then do
     o = newobj(cls_Character, KD_CHR, 0)
     o_x[o % 2] = code

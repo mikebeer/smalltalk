@@ -778,13 +778,13 @@ prim_b: procedure = .int
     end
     when p = PR_UPPER then do
       if isstr(rcv) = 0 then return 0
-      if kindof(rcv) = KD_SYM then return mksym(upper(o_s[rcv % 2]))
-      return mkstr(upper(o_s[rcv % 2]))
+      if kindof(rcv) = KD_SYM then return mksym(toUppercase(o_s[rcv % 2]))
+      return mkstr(toUppercase(o_s[rcv % 2]))
     end
     when p = PR_LOWER then do
       if isstr(rcv) = 0 then return 0
-      if kindof(rcv) = KD_SYM then return mksym(lower(o_s[rcv % 2]))
-      return mkstr(lower(o_s[rcv % 2]))
+      if kindof(rcv) = KD_SYM then return mksym(toLowercase(o_s[rcv % 2]))
+      return mkstr(toLowercase(o_s[rcv % 2]))
     end
     when p = PR_INDEXOF then do
       if isstr(rcv) = 0 then return 0
@@ -850,7 +850,7 @@ prim_b: procedure = .int
     when p = PR_CHARFROM then do
       if a1 // 2 = 0 then return 0
       i = intval(a1)
-      if i < 0 | i > 255 then return 0
+      if i < 0 | i > 1114111 | (i >= 55296 & i <= 57343) then return 0
       return mkchar(i)
     end
     when p = PR_ARRNEW then do
@@ -1078,6 +1078,7 @@ prim_c: procedure = .int
   n = .int
   o = .int
   e = .int
+  bb = .binary
   c = .int
   v = .int
   id = .int
@@ -1380,6 +1381,59 @@ prim_c: procedure = .int
         end
       end
       return r
+    end
+    when p = PR_UNICODE then do
+      /* a1 = op, a2 = argument; receiver is a String/Symbol/Character/ByteArray */
+      if a1 // 2 = 0 then return 0
+      i = intval(a1)
+      if i <= 8 then do
+        if isstr(rcv) = 0 then return 0
+        s = o_s[rcv % 2]
+        if i = 1 then t = toNFC(s)
+        else if i = 2 then t = toNFD(s)
+        else if i = 3 then t = toNFKC(s)
+        else if i = 4 then t = toNFKD(s)
+        else if i = 5 then t = toCasefold(s)
+        else if i = 6 then return mkint(graphemecount(s))
+        else if i = 7 then t = toUppercase(s)
+        else t = toLowercase(s)
+        if kindof(rcv) = KD_SYM then return mksym(t)
+        return mkstr(t)
+      end
+      if i = 9 then do
+        /* UTF-8 bytes of a string as a ByteArray */
+        if isstr(rcv) = 0 then return 0
+        s = o_s[rcv % 2]
+        bb = encode(s, "UTF-8")
+        n = 0
+        assembler blen n,bb
+        r = mkarray(n)
+        do j = 1 to n
+          k = 0
+          e = j - 1
+          assembler getbyte k,bb,e
+          call slot_put r, j - 1, mkint(k)
+        end
+        j = find_class("ByteArray")
+        if j > 0 then o_cls[r % 2] = j
+        return r
+      end
+      if i = 10 then do
+        /* decode a ByteArray/Array of byte values as UTF-8 */
+        if o_kind[rcv % 2] \= KD_ARR then return 0
+        n = o_n[rcv % 2]
+        t = ""
+        do j = 1 to n
+          k = intval(sl[o_slot[rcv % 2] + j - 1])
+          if k < 0 | k > 255 then return 0
+          t = t || right(d2x(k), 2, "0")
+        end
+        if n = 0 then return mkstr("")
+        bb = x2bin(t)
+        if isDecodable(bb, "UTF-8") = 0 then return 0
+        return mkstr(decode(bb, "UTF-8"))
+      end
+      return 0
     end
     when p = PR_FILEINSTR then do
       if isstr(a1) = 0 then return 0
