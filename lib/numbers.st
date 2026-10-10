@@ -334,3 +334,78 @@ Fraction extend [
     printOn: aStream [ aStream nextPutAll: self printString ]
     storeString [ ^'(Fraction numerator: ', numerator printString, ' denominator: ', denominator printString, ')' ]
 ]
+
+Number subclass: ScaledDecimal [
+    | value scale |
+    ScaledDecimal class >> value: v scale: s [ ^self basicNew setValue: v scale: s ]
+    ScaledDecimal class >> fromString: aString scale: s [
+        | i int k |
+        i := aString indexOf: $..
+        i = 0 ifTrue: [^self value: aString asInteger scale: s].
+        k := aString size - i.
+        int := ((aString copyFrom: 1 to: i - 1), (aString copyFrom: i + 1 to: aString size)) asInteger.
+        ^self value: int / (10 raisedTo: k) scale: s
+    ]
+    setValue: v scale: s [ value := v. scale := s ]
+    value [ ^value ]
+    scale [ ^scale ]
+    isScaledDecimal [ ^true ]
+    isRational [ ^true ]
+    generality [ ^350 ]
+    coerce: n [ ^ScaledDecimal value: n scale: 0 ]
+    exactOf: n [ ^n isScaledDecimal ifTrue: [n value] ifFalse: [n] ]
+    scaleOf: n [ ^n isScaledDecimal ifTrue: [n scale] ifFalse: [0] ]
+    ofKind: n [ ^n isInteger or: [n isFraction or: [n isScaledDecimal]] ]
+    + n [ (self ofKind: n) ifFalse: [^self retry: #+ coercing: n]. ^ScaledDecimal value: value + (self exactOf: n) scale: (scale max: (self scaleOf: n)) ]
+    - n [ (self ofKind: n) ifFalse: [^self retry: #- coercing: n]. ^ScaledDecimal value: value - (self exactOf: n) scale: (scale max: (self scaleOf: n)) ]
+    * n [ (self ofKind: n) ifFalse: [^self retry: #* coercing: n]. ^ScaledDecimal value: value * (self exactOf: n) scale: (scale max: (self scaleOf: n)) ]
+    / n [
+        (self ofKind: n) ifFalse: [^self retry: #/ coercing: n].
+        (self exactOf: n) = 0 ifTrue: [^self zeroDivide].
+        ^ScaledDecimal value: value / (self exactOf: n) scale: (scale max: (self scaleOf: n))
+    ]
+    // n [ ^(self / n) floor ]
+    \\ n [ ^self - (self // n * n) ]
+    < n [ (self ofKind: n) ifFalse: [^self asFloat < n]. ^value < (self exactOf: n) ]
+    > n [ (self ofKind: n) ifFalse: [^self asFloat > n]. ^value > (self exactOf: n) ]
+    <= n [ ^(self > n) not ]
+    >= n [ ^(self < n) not ]
+    = n [ (self ofKind: n) ifFalse: [^(n isKindOf: Number) and: [self asFloat = n]]. ^value = (self exactOf: n) ]
+    ~= n [ ^(self = n) not ]
+    hash [ ^value hash ]
+    negated [ ^ScaledDecimal value: value negated scale: scale ]
+    abs [ ^ScaledDecimal value: value abs scale: scale ]
+    sign [ ^value sign ]
+    isZero [ ^value = 0 ]
+    negative [ ^value < 0 ]
+    truncated [ ^value truncated ]
+    floor [ ^value floor ]
+    ceiling [ ^value ceiling ]
+    rounded [ ^value rounded ]
+    fractionPart [ ^ScaledDecimal value: value - value truncated scale: scale ]
+    integerPart [ ^ScaledDecimal value: value truncated scale: scale ]
+    asInteger [ ^value truncated ]
+    asFloat [ ^value asFloat ]
+    asFraction [ ^value ]
+    asExactFraction [ ^value ]
+    asScaledDecimal: s [ ^ScaledDecimal value: value scale: s ]
+    roundTo: n [ ^(self / n) rounded * n ]
+    printOn: aStream [
+        | v ip fp |
+        v := value abs.
+        value < 0 ifTrue: [aStream nextPut: $-].
+        ip := v truncated.
+        aStream print: ip.
+        scale > 0 ifTrue: [
+            fp := ((v - ip) * (10 raisedTo: scale)) truncated.
+            aStream nextPut: $.; nextPutAll: (fp printString padLeft: $0 to: scale)].
+        aStream nextPut: $s.
+        scale > 0 ifTrue: [aStream print: scale]
+    ]
+]
+Number extend [
+    isScaledDecimal [ ^false ]
+    asScaledDecimal: s [ ^ScaledDecimal value: self asExactFraction scale: s ]
+]
+Fraction extend [ asExactFraction [ ^self ] ]
+Integer extend [ asExactFraction [ ^self ] ]

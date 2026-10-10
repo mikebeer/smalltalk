@@ -168,3 +168,7 @@ Behavior extend [
     allInstances [ <primitive: allInstances> ^#() ]
     instanceCount [ ^self allInstances size ]
 ]
+
+Object extend [
+    become: other [ <primitive: become> ^self error: 'become: needs two heap objects' ]
+]

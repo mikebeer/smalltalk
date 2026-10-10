@@ -288,11 +288,27 @@ lex_number: procedure = .void
       q = v
     end
   end
-  /* scaled decimal 1.5s2 : treated as float */
-  if substr(txt, q, 1) == "s" & isdigit(substr(txt, q + 1, 1)) = 1 & isf = 1 then do
-    q = q + 1
-    do while q <= tlen & isdigit(substr(txt, q, 1)) = 1
-      q = q + 1
+  /* scaled decimal 1.5s2, 3s2, 1.5s : a send of ScaledDecimal fromString:scale: */
+  if substr(txt, q, 1) == "s" & ex == "" then do
+    p = q + 1
+    if isdigit(substr(txt, p, 1)) = 1 then do
+      v = p
+      do while v <= tlen & isdigit(substr(txt, v, 1)) = 1
+        v = v + 1
+      end
+      lx_i = substr(txt, p, v - p) as .int
+      lx_t = TK_SCALED
+      if fr == "" then lx_s = dg
+      else lx_s = dg || "." || fr
+      tp = v
+      return
+    end
+    else if isf = 1 & isalnum_ch(substr(txt, p, 1)) = 0 then do
+      lx_i = length(fr)
+      lx_t = TK_SCALED
+      lx_s = dg || "." || fr
+      tp = p
+      return
     end
   end
   tp = q
@@ -616,6 +632,17 @@ parse_primary: procedure = .int
     call advance
     return nd(ND_LIT, o, 0, 0, 0, 0, "")
   end
+  if tk = TK_SCALED then do
+    e = nd(ND_LIT, mkstr(ts), 0, 0, 0, 0, "")
+    t = nd(ND_LIT, mkint(ti), 0, 0, 0, 0, "")
+    nal = nal + 1
+    al[nal] = e
+    o = nal
+    nal = nal + 1
+    al[nal] = t
+    call advance
+    return mk_send(nd(ND_RVAR, 0, 0, 0, 0, 0, "ScaledDecimal"), "fromString:scale:", o, 2)
+  end
   if tk = TK_STR then do
     o = mkstr(ts)
     call advance
@@ -891,3 +918,10 @@ parse_temps: procedure = .int
     end
   end
   return n
+
+isalnum_ch: procedure = .int
+  arg ch = .string
+  if ch == "" then return 0
+  if isdigit(ch) = 1 then return 1
+  if (ch >>= "a" & ch <<= "z") | (ch >>= "A" & ch <<= "Z") | ch == "_" then return 1
+  return 0

@@ -1348,6 +1348,21 @@ prim_c: procedure = .int
       if isstr(a1) = 0 then return 0
       return eval_string(o_s[a1 % 2])
     end
+    when p = PR_BECOME then do
+      /* swap the contents of two heap objects: every reference now sees the other */
+      if rcv // 2 \= 0 | a1 // 2 \= 0 then return 0
+      if rcv = a1 then return rcv
+      i = rcv % 2
+      k = a1 % 2
+      c = o_cls[i]; o_cls[i] = o_cls[k]; o_cls[k] = c
+      c = o_kind[i]; o_kind[i] = o_kind[k]; o_kind[k] = c
+      c = o_n[i]; o_n[i] = o_n[k]; o_n[k] = c
+      c = o_slot[i]; o_slot[i] = o_slot[k]; o_slot[k] = c
+      c = o_x[i]; o_x[i] = o_x[k]; o_x[k] = c
+      s = o_s[i]; o_s[i] = o_s[k]; o_s[k] = s
+      x = o_f[i]; o_f[i] = o_f[k]; o_f[k] = x
+      return rcv
+    end
     when p = PR_ALLINST then do
       if rcv // 2 \= 0 then return 0
       if o_kind[rcv % 2] \= KD_CLS & o_kind[rcv % 2] \= KD_META then return 0
