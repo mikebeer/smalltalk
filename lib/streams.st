@@ -146,3 +146,43 @@ SequenceableCollection extend [
     writeStream [ ^WriteStream on: self copyEmpty ]
     readWriteStream [ ^ReadWriteStream on: self copyEmpty ]
 ]
+
+ReadWriteStream subclass: FileStream [
+    | path mode |
+    FileStream class >> open: aPath mode: aMode [
+        | s text |
+        s := self basicNew initOn: String new.
+        s setPath: aPath mode: aMode.
+        aMode = 'r' ifTrue: [
+            text := self primRead: aPath.
+            text isNil ifTrue: [^SystemExceptions.NotFound signalOn: aPath what: 'file' reason: 'could not open file ', aPath].
+            s setContents: text].
+        ^s
+    ]
+    FileStream class >> open: aPath [ ^self open: aPath mode: 'r' ]
+    FileStream class >> read: aPath [ ^self open: aPath mode: 'r' ]
+    FileStream class >> write: aPath [ ^self open: aPath mode: 'w' ]
+    FileStream class >> append: aPath [ ^self open: aPath mode: 'a' ]
+    FileStream class >> primRead: aPath [ <primitive: fileRead> ^nil ]
+    FileStream class >> exists: aPath [ ^(self primRead: aPath) notNil ]
+    FileStream class >> contentsOf: aPath [ ^self primRead: aPath ]
+    setPath: aPath mode: aMode [ path := aPath. mode := aMode ]
+    path [ ^path ]
+    primWrite: p text: text append: flag [ <primitive: fileWrite> ^false ]
+    flush [
+        mode = 'r' ifTrue: [^self].
+        (self primWrite: path text: acc append: mode = 'a') ifFalse: [^self error: 'could not write file ', path].
+        mode := 'a'.
+        acc := acc copyEmpty
+    ]
+    close [ self flush ]
+    nextLine [
+        | r c |
+        self atEnd ifTrue: [^nil].
+        r := WriteStream on: String new.
+        [self atEnd or: [(c := self next) = Character nl]] whileFalse: [r nextPut: c].
+        ^r contents
+    ]
+    lines [ | r | r := OrderedCollection new. [self atEnd] whileFalse: [r add: self nextLine]. ^r ]
+    contents [ ^acc ]
+]

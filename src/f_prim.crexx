@@ -1348,6 +1348,18 @@ prim_c: procedure = .int
       end
       return mkfloat(rnd_state as .float / 2147483648.0)
     end
+    when p = PR_FILEREAD then do
+      if isstr(a1) = 0 then return 0
+      if file_ok(o_s[a1 % 2]) = 0 then return nil_oop
+      return mkstr(read_file(o_s[a1 % 2]))
+    end
+    when p = PR_FILEWRITE then do
+      /* fileWrite: path text: string append: boolean */
+      if isstr(a1) = 0 | isstr(a2) = 0 then return 0
+      return mkbool(file_write(o_s[a1 % 2], o_s[a2 % 2], ast[base + 3] = true_oop))
+    end
+    when p = PR_DATESTR then return mkstr(date("S"))
+    when p = PR_TIMESTR then return mkstr(time("N"))
     when p = PR_FLOATPRINT then return 0
     when p = PR_BIGOP then return 0
     otherwise return 0
@@ -1457,3 +1469,29 @@ eval_string: procedure = .int
   envn = sv_envn
   r_cls = sv_cls
   return v
+
+file_ok: procedure = .int
+  arg fn = .string
+  fid = .int
+  rcx = .int
+  rmode = .string
+  rmode = "r"
+  fid = 0
+  assembler fopen fid, fn, rmode
+  if fid = 0 then return 0
+  assembler fclose rcx, fid
+  return 1
+
+file_write: procedure = .int
+  arg fn = .string, txt2 = .string, app = .int
+  fid = .int
+  rcx = .int
+  wmode = .string
+  wmode = "w"
+  if app = 1 then wmode = "a"
+  fid = 0
+  assembler fopen fid, fn, wmode
+  if fid = 0 then return 0
+  assembler fwrite fid, txt2
+  assembler fclose rcx, fid
+  return 1

@@ -115,7 +115,7 @@ init: procedure = .void
   h_in = _open("stdin", "r")
   stdin_eof = 0
   rnd_state = 12345
-  prim_names = "add sub mul div idiv mod quo rem lt gt le ge eq ne ident nident class basicSize basicAt basicAtPut instVarAt instVarAtPut identityHash perform performWithArgs isKindOf isMemberOf respondsTo shallowCopy basicNew basicNewSize floatOp truncated floor ceiling rounded asFloat bitAnd bitOr bitXor bitShift printString printRadix isInteger isFloat isString isSymbol isCharacter isNumber sqrtFloor strSize strAt strAtPut strCat strCopy strEq strLt strHash asSymbol asString upper lower strIndexOf strReplaceAll asNumber strTrim strSplit strReverse strNew charValue charFrom arrNew arrAt arrAtPut arrSize arrCopy arrFill arrReplace dictNew dictAt dictAtPut dictHas dictRemove dictKeys dictValues dictSize dictCopy blockValue blockValueArgs blockNumArgs whileTrue whileFalse onDo ensure ifCurtailed signal resume return retry pass outer retryUsing className superclass subclassNamed addInstVar instanceVariableNames selectors includesSelector basicNewClass compile addClassVar lookupSelector subclasses category globalAt globalAtPut globalHas transcript stdinLine stdinAtEnd msecs halt exit dnuArgs isNil evaluate displayString allSymbols excInfo bigOp floatPrint random strFind strCompare asStringOf secs format"
+  prim_names = "add sub mul div idiv mod quo rem lt gt le ge eq ne ident nident class basicSize basicAt basicAtPut instVarAt instVarAtPut identityHash perform performWithArgs isKindOf isMemberOf respondsTo shallowCopy basicNew basicNewSize floatOp truncated floor ceiling rounded asFloat bitAnd bitOr bitXor bitShift printString printRadix isInteger isFloat isString isSymbol isCharacter isNumber sqrtFloor strSize strAt strAtPut strCat strCopy strEq strLt strHash asSymbol asString upper lower strIndexOf strReplaceAll asNumber strTrim strSplit strReverse strNew charValue charFrom arrNew arrAt arrAtPut arrSize arrCopy arrFill arrReplace dictNew dictAt dictAtPut dictHas dictRemove dictKeys dictValues dictSize dictCopy blockValue blockValueArgs blockNumArgs whileTrue whileFalse onDo ensure ifCurtailed signal resume return retry pass outer retryUsing className superclass subclassNamed addInstVar instanceVariableNames selectors includesSelector basicNewClass compile addClassVar lookupSelector subclasses category globalAt globalAtPut globalHas transcript stdinLine stdinAtEnd msecs halt exit dnuArgs isNil evaluate displayString allSymbols excInfo bigOp floatPrint random strFind strCompare asStringOf secs format fileRead fileWrite dateStr timeStr"
   selboot = "+ - * / // \\ < > <= >= = ~= == ~~ , value value: value:value: value:value:value: value:value:value:value: doesNotUnderstand: printString displayString printOn: hash signal defaultAction new initialize size at: at:put: do: isKindOf: messageText description next atEnd class isNil notNil lessOrEqual: -> key printString: displayNl printNl executeStatements mustBeBoolean error:"
   /* ---- lexer / parser ---- */
   txt = ""
@@ -4523,6 +4523,18 @@ prim_c: procedure = .int
       end
       return mkfloat(rnd_state as .float / 2147483648.0)
     end
+    when p = 139 then do
+      if isstr(a1) = 0 then return 0
+      if file_ok(o_s[a1 % 2]) = 0 then return nil_oop
+      return mkstr(read_file(o_s[a1 % 2]))
+    end
+    when p = 140 then do
+      /* fileWrite: path text: string append: boolean */
+      if isstr(a1) = 0 | isstr(a2) = 0 then return 0
+      return mkbool(file_write(o_s[a1 % 2], o_s[a2 % 2], ast[base + 3] = true_oop))
+    end
+    when p = 141 then return mkstr(date("S"))
+    when p = 142 then return mkstr(time("N"))
     when p = 132 then return 0
     when p = 131 then return 0
     otherwise return 0
@@ -4632,6 +4644,32 @@ eval_string: procedure = .int
   envn = sv_envn
   r_cls = sv_cls
   return v
+
+file_ok: procedure = .int
+  arg fn = .string
+  fid = .int
+  rcx = .int
+  rmode = .string
+  rmode = "r"
+  fid = 0
+  assembler fopen fid, fn, rmode
+  if fid = 0 then return 0
+  assembler fclose rcx, fid
+  return 1
+
+file_write: procedure = .int
+  arg fn = .string, txt2 = .string, app = .int
+  fid = .int
+  rcx = .int
+  wmode = .string
+  wmode = "w"
+  if app = 1 then wmode = "a"
+  fid = 0
+  assembler fopen fid, fn, wmode
+  if fid = 0 then return 0
+  assembler fwrite fid, txt2
+  assembler fclose rcx, fid
+  return 1
 
 
 /* ---------------------------------------------------------------------

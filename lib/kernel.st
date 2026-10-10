@@ -414,3 +414,55 @@ Point extend [
     dist: p [ ^((x - p x) squared + (y - p y) squared) sqrt ]
     printOn: aStream [ aStream print: x; nextPut: $@; print: y ]
 ]
+
+Date class extend [
+    primString [ <primitive: dateStr> ]
+    today [
+        | s |
+        s := self primString.
+        ^self new setYear: (s copyFrom: 1 to: 4) asNumber month: (s copyFrom: 5 to: 6) asNumber day: (s copyFrom: 7 to: 8) asNumber
+    ]
+    year: y month: m day: d [ ^self new setYear: y month: m day: d ]
+]
+Date extend [
+    | year month day |
+    setYear: y month: m day: d [ year := y. month := m. day := d ]
+    year [ ^year ]
+    month [ ^month ]
+    day [ ^day ]
+    dayOfMonth [ ^day ]
+    < other [ ^self asNumber < other asNumber ]
+    = other [ ^(other isKindOf: Date) and: [self asNumber = other asNumber] ]
+    hash [ ^self asNumber ]
+    asNumber [ ^year * 10000 + (month * 100) + day ]
+    printOn: aStream [
+        aStream nextPutAll: (year printPaddedWith: $0 to: 4); nextPut: $-;
+            nextPutAll: (month printPaddedWith: $0 to: 2); nextPut: $-;
+            nextPutAll: (day printPaddedWith: $0 to: 2)
+    ]
+]
+Time class extend [
+    primString [ <primitive: timeStr> ]
+    now [
+        | s |
+        s := self primString.
+        ^self new setHours: (s copyFrom: 1 to: 2) asNumber minutes: (s copyFrom: 4 to: 5) asNumber seconds: (s copyFrom: 7 to: 8) asNumber
+    ]
+    hours: h minutes: m seconds: s [ ^self new setHours: h minutes: m seconds: s ]
+]
+Time extend [
+    | hours minutes seconds |
+    setHours: h minutes: m seconds: s [ hours := h. minutes := m. seconds := s ]
+    hours [ ^hours ]
+    minutes [ ^minutes ]
+    seconds [ ^seconds ]
+    asSeconds [ ^hours * 3600 + (minutes * 60) + seconds ]
+    < other [ ^self asSeconds < other asSeconds ]
+    = other [ ^(other isKindOf: Time) and: [self asSeconds = other asSeconds] ]
+    hash [ ^self asSeconds ]
+    printOn: aStream [
+        aStream nextPutAll: (hours printPaddedWith: $0 to: 2); nextPut: $:;
+            nextPutAll: (minutes printPaddedWith: $0 to: 2); nextPut: $:;
+            nextPutAll: (seconds printPaddedWith: $0 to: 2)
+    ]
+]

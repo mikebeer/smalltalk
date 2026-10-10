@@ -136,3 +136,7 @@ PR_STRCOMPARE strCompare
 PR_STRAS asStringOf
 PR_SECS secs
 PR_FORMAT format
+PR_FILEREAD fileRead
+PR_FILEWRITE fileWrite
+PR_DATESTR dateStr
+PR_TIMESTR timeStr

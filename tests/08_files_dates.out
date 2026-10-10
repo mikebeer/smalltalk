@@ -1,0 +1,11 @@
+line one
+line two
+line three
+true
+false
+29
+Object: '/tmp/nope' error: could not open file /tmp/nope
+FileStream class>>open:mode:
+FileStream class>>read:
+UndefinedObject>>executeStatements
+2026-10-10
