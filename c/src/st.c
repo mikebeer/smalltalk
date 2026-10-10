@@ -1,0 +1,12 @@
+/* Smalltalk-80 interpreter in portable C89 - the parts are inlined by tools/amalg.sh */
+#include "s0_base.c"
+#include "s_gen.h"
+#include "s1_obj.c"
+#include "s2_lex.c"
+#include "s3_parse.c"
+#include "s4_res.c"
+#include "s5_eval.c"
+#include "s7_num.c"
+#include "s8_str.c"
+#include "s9_sys.c"
+#include "s6_main.c"

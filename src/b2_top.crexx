@@ -515,7 +515,7 @@ repl_loop: procedure = .void
   ul = .int
   cmd = .string
   buf = ""
-  call outs "CREXX Smalltalk - type exit to leave" || '0a'x
+  call outs "Smalltalk - type exit to leave" || '0a'x
   do forever
     if halted = 1 then leave
     if buf == "" then call outs "st> "
