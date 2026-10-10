@@ -25,6 +25,7 @@ it afterwards. Set `CREXX` to the `crexx` driver if it is not on your `PATH`.
   with coercion, radix literals (`16r1F`), `\\ // rem: quo: gcd: factorial raisedTo:` and more.
 * **Collections**: Array, OrderedCollection, SortedCollection, Interval, Set, Bag, Dictionary,
   Association, String, Symbol, with the usual `do:`/`collect:`/`select:`/`inject:into:` protocol.
+* **Data structures**: Complex numbers, Stack, Queue, Matrix; number formatting (`printShowingDecimalPlaces:`, `asStringWithCommas`).
 * **Streams**: ReadStream, WriteStream, ReadWriteStream, FileStream (`read:`, `write:`, `append:`, `exists:`); **Date** and **Time** (`today`, `now`, **DateTime**, calendar arithmetic); `Transcript` (`show:`, `showCr:`, `display:`,
   `print:`, `cr`, `tab`...).
 * **Exceptions**: `on:do:`, `ensure:`, `ifCurtailed:`, `signal`, `signal:`, `retry`, `return:`,
@@ -52,7 +53,7 @@ it afterwards. Set `CREXX` to the `crexx` driver if it is not on your `PATH`.
 | --- | --- |
 | `src/*.crexx` | interpreter sources (lexer/parser, resolver, evaluator, primitives, big integers) |
 | `build.py` | concatenates `src/` into `smalltalk.crexx` and substitutes constants |
-| `lib/*.st` | class library written in Smalltalk (kernel, numbers, collections, streams, exceptions, extras) |
+| `lib/*.st` | class library written in Smalltalk (kernel, numbers, collections, streams, exceptions, extras, structures) |
 | `examples/` | sample programs |
 | `tests/` | regression tests (`tests/run_tests.sh`) |
 | `docs/` | user manual (docx and PDF) |

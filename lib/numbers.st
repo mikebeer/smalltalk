@@ -75,7 +75,7 @@ Number extend [
     log: base [ ^self ln / base ln ]
     raisedTo: n [
         | r b e |
-        n isInteger ifFalse: [^self primFloat: 11 with: n].
+        n isInteger ifFalse: [^self primFloat: 11 with: n asFloat].
         n < 0 ifTrue: [^(self raisedTo: n negated) reciprocal].
         r := 1. b := self. e := n.
         [e > 0] whileTrue: [

@@ -35,7 +35,7 @@ do while ia <= av.0
   ia = ia + 1
 end
 call boot
-libs = "kernel.st numbers.st collections.st streams.st exceptions.st extras.st"
+libs = "kernel.st numbers.st collections.st streams.st exceptions.st extras.st structures.st"
 do ia = 1 to words(libs)
   lf = libdir || "/" || word(libs, ia)
   ltxt = read_file(lf)
