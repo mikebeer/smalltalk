@@ -1,0 +1,41 @@
+true
+true
+false
+('12' '345' )
+'10'
+RegexMatch('2026-10-10')
+'hell0 w0rld'
+'Smith, John'
+('a' 'b' 'c' )
+('dog' 'cat' )
+('color' 'colour' )
+('aa' 'aaa' 'aaa' )
+true
+'<a>'
+'<a><b>'
+'ababab'
+('cat' )
+('x@y.com' 'z@w.org' )
+true
+true
+'trim me'
+2
+true
+'-a-b-c-'
+false
+true
+true
+Object: a Regex error: missing ) in regex
+Regex(Object)>>error:
+Regex>>parseAtom
+Regex>>parseRep
+Regex>>parseSeq
+Regex>>parseAlt
+Regex>>parse:
+Regex class>>on:
+String>>matchesRegex:
+UndefinedObject>>executeStatements
+true
+true
+false
+3
