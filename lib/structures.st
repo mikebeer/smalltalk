@@ -408,3 +408,57 @@ Dictionary extend [
         aStream nextPut: $}
     ]
 ]
+
+Date class extend [
+    fromString: s [
+        | p |
+        p := s subStrings: '-/'.
+        p size = 3 ifFalse: [^self error: 'bad date: ', s].
+        ^self year: (p at: 1) asInteger month: (p at: 2) asInteger day: (p at: 3) asInteger
+    ]
+]
+Time class extend [
+    fromString: s [
+        | p |
+        p := s subStrings: ':'.
+        p size < 2 ifTrue: [^self error: 'bad time: ', s].
+        ^self hours: (p at: 1) asInteger minutes: (p at: 2) asInteger seconds: (p size > 2 ifTrue: [(p at: 3) asInteger] ifFalse: [0])
+    ]
+]
+DateTime class extend [
+    fromString: s [
+        | p |
+        p := s subStrings: 'T '.
+        p size = 2 ifFalse: [^self error: 'bad date-time: ', s].
+        ^self date: (Date fromString: (p at: 1)) time: (Time fromString: (p at: 2))
+    ]
+]
+String extend [
+    asDate [ ^Date fromString: self ]
+    asTime [ ^Time fromString: self ]
+    asDateTime [ ^DateTime fromString: self ]
+]
+Date extend [
+    printOn: aStream format: f [
+        "f uses yyyy, yy, mm, dd, mon (Jan), month (January), day (Monday)"
+        | t |
+        t := f copyReplaceAll: 'yyyy' with: (year printPaddedWith: $0 to: 4).
+        t := t copyReplaceAll: 'month' with: self monthName asString.
+        t := t copyReplaceAll: 'mon' with: self shortMonthName.
+        t := t copyReplaceAll: 'day' with: self dayName asString.
+        t := t copyReplaceAll: 'dd' with: (day printPaddedWith: $0 to: 2).
+        t := t copyReplaceAll: 'mm' with: (month printPaddedWith: $0 to: 2).
+        t := t copyReplaceAll: 'yy' with: ((year \\ 100) printPaddedWith: $0 to: 2).
+        aStream nextPutAll: t
+    ]
+    formatted: f [ | ws | ws := WriteStream on: String new. self printOn: ws format: f. ^ws contents ]
+]
+Time extend [
+    formatted: f [
+        | t |
+        t := f copyReplaceAll: 'hh' with: (hours printPaddedWith: $0 to: 2).
+        t := t copyReplaceAll: 'mm' with: (minutes printPaddedWith: $0 to: 2).
+        t := t copyReplaceAll: 'ss' with: (seconds printPaddedWith: $0 to: 2).
+        ^t
+    ]
+]

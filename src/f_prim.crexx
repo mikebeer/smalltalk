@@ -1348,6 +1348,16 @@ prim_c: procedure = .int
       end
       return mkfloat(rnd_state as .float / 2147483648.0)
     end
+    when p = PR_RANDSEED then do
+      if a1 // 2 = 0 then return 0
+      rnd_state = intval(a1)
+      if rnd_state < 0 then rnd_state = 0 - rnd_state
+      return rcv
+    end
+    when p = PR_GETENV then do
+      if isstr(a1) = 0 then return 0
+      return mkstr(getenv(o_s[a1 % 2]))
+    end
     when p = PR_FILEREAD then do
       if isstr(a1) = 0 then return 0
       if file_ok(o_s[a1 % 2]) = 0 then return nil_oop

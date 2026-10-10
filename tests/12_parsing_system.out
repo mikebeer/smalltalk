@@ -1,0 +1,18 @@
+2026-10-10
+2026-01-05
+14:05:09
+14:05:00
+2026-10-10T14:05:09
+Saturday, 10 Oct 2026
+October 10, 26
+10/10/2026
+14.05
+Object: Date error: bad date: bad
+Date class(Object)>>error:
+Date class>>fromString:
+String>>asDate
+UndefinedObject>>executeStatements
+true
+''
+true
+'linux'

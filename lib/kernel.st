@@ -374,6 +374,10 @@ SystemDictionary extend [
     halt [ <primitive: halt> ]
     quit [ <primitive: exit> ]
     quit: n [ <primitive: exit> ]
+    exit [ <primitive: exit> ]
+    exit: n [ <primitive: exit> ]
+    getenv: name [ <primitive: getenv> ]
+    os [ ^'linux' ]
     classAt: key [ ^self at: key ]
     printOn: aStream [ aStream nextPutAll: 'Smalltalk' ]
 ]
@@ -385,7 +389,8 @@ Time class extend [
 ]
 
 Random class extend [
-    seed: n [ ^self new ]
+    seed: n [ self primSeed: n. ^self new ]
+    primSeed: n [ <primitive: randSeed> ]
     next [ ^self new next ]
     between: lo and: hi [ ^self new between: lo and: hi ]
 ]

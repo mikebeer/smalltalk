@@ -140,3 +140,5 @@ PR_FILEREAD fileRead
 PR_FILEWRITE fileWrite
 PR_DATESTR dateStr
 PR_TIMESTR timeStr
+PR_RANDSEED randSeed
+PR_GETENV getenv
