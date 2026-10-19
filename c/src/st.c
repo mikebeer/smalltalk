@@ -9,4 +9,5 @@
 #include "s7_num.c"
 #include "s8_str.c"
 #include "s9_sys.c"
+#include "s_gc.c"
 #include "s6_main.c"

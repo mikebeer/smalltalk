@@ -163,6 +163,8 @@ int main(int argc, char **argv)
     long len;
     char *text, *path;
     files = (char **)xmalloc(sizeof(char *) * (size_t)(argc + 1));
+    prim_fn = prim;
+    if (argc < 0) prim_fn = prim_a;   /* never true; keeps the pointer from being resolved at compile time */
     init_state();
     libdir = NULL;
     for (ia = 1; ia < argc; ia++) {
@@ -170,10 +172,16 @@ int main(int argc, char **argv)
             ia++;
             libdir = argv[ia];
         } else if (strcmp(argv[ia], "-h") == 0 || strcmp(argv[ia], "--help") == 0) {
-            printf("usage: st [-L libdir] [-i] [file.st ...] [-- arg ...]\n");
+            printf("usage: st [-L libdir] [-i] [-nogc] [-gcstress=N] [file.st ...] [-- arg ...]\n");
             return 0;
         } else if (strcmp(argv[ia], "-i") == 0) {
             repl_mode = 1;
+        } else if (strcmp(argv[ia], "-nogc") == 0) {
+            gc_on = 0;
+        } else if (strncmp(argv[ia], "-gcstress=", 10) == 0) {
+            gc_stress = atol(argv[ia] + 10);
+        } else if (strcmp(argv[ia], "-gcverbose") == 0) {
+            gc_verbose = 1;
         } else if (strcmp(argv[ia], "--") == 0) {
             sargs = (char **)xmalloc(sizeof(char *) * (size_t)(argc + 1));
             for (ia = ia + 1; ia < argc; ia++) sargs[nsargs++] = argv[ia];
@@ -185,6 +193,7 @@ int main(int argc, char **argv)
         libdir = getenv("SMALLTALK_LIB");
         if (libdir == NULL) libdir = "lib";
     }
+    gc_init();
     boot();
     for (i = 0; lib_files[i] != 0; i++) {
         path = join_path(libdir, lib_files[i]);

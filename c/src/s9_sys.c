@@ -424,6 +424,7 @@ static oop prim_c(int p, oop rcv, long base, int na)
             h_cls[htop] = a1;
             h_blk[htop] = a2;
             h_id[htop] = id;
+            if (htop > hmax) hmax = htop;
             v = call_block(rcv, asp, 0);
             htop = oldtop;
             if (unw == UW_EXC && unw_t == id) {
@@ -448,7 +449,11 @@ static oop prim_c(int p, oop rcv, long base, int na)
         sv_v = unw_v;
         oldtop = htop;
         unw = UW_NONE;
+        b2 = asp;
+        ast_push(v);      /* keep the results of the protected block and of */
+        ast_push(sv_v);   /* an unwinding in progress alive during the ensure block */
         r = call_block(a1, asp, 0);
+        asp = b2;
         htop = oldtop;
         if (unw == UW_NONE) {
             unw = sv_u;

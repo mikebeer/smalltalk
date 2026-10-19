@@ -166,6 +166,22 @@ static int cls_LargePositiveInteger, cls_LargeNegativeInteger;
 static int cls_BlockClosure, cls_UndefinedObject, cls_Message;
 static oop chr_oop[256];
 
+/* ---- garbage collector state (s_gc.c) ----------------------------------- */
+#define KD_FREE 99
+static long ofree;                 /* head of the free object list (chained by .x) */
+static double gc_alloc, gc_next;   /* bytes allocated since the last GC, trigger */
+static int gc_on = 1;              /* 0 with -nogc */
+static long gc_stress, gc_tick;    /* -gcstress=N: collect at every N-th safe point */
+static long gc_count, gc_freed;    /* statistics */
+static int gc_verbose;
+static int *vsz;                   /* size of the frame starting at vp index i */
+static long vszcap;
+static long *act_f;                /* frames being executed (GC roots) */
+static long nact, actcap;
+static long hmax;                  /* highest handler stack index ever used */
+static long de_free, dd_free;      /* free dictionary entries / dictionary ids */
+#define GC_POINT() do { if (gc_alloc >= gc_next) gc_point(); } while (0)
+
 /* ---- state ------------------------------------------------------------ */
 static int booted, halted, rc_exit, repl_mode, repl_echo, in_eval;
 static int stdin_eof;
@@ -290,6 +306,8 @@ static void init_temps(long base, long n);
 static long alloc_frame(long size);
 static char *printstr0(oop x);   /* malloc'ed */
 static oop make_context(void);
+static void gc_point(void);
+static void act_push(long fb);
 static void ast_push(oop v);
 
 /* ---- prototypes: primitives (s7..s9) ----------------------------------
@@ -300,6 +318,9 @@ static oop prim_a(int p, oop rcv, long base, int na);   /* numbers, objects, ref
 static oop prim_b(int p, oop rcv, long base, int na);   /* strings, arrays, dictionaries */
 static oop prim_c(int p, oop rcv, long base, int na);   /* blocks, exceptions, classes, system */
 static oop prim_net(int p, oop rcv, long base, int na); /* sockets (stubs) */
+/* primitives are called through a pointer set at start-up so that compilers do not
+   inline their large locals into invoke(): this keeps the C stack per Smalltalk call small */
+static oop (*prim_fn)(int, oop, long, int);
 
 /* numbers (s7) */
 static int numkind(oop x);                  /* 0 none, 1 SmallInteger, 2 big, 3 float */

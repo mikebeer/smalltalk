@@ -10,6 +10,17 @@ static void fl_need(long size)
     }
 }
 
+/* a new frame at the end of vp; its size is recorded for the collector */
+static long frame_new(long size)
+{
+    long fb = nvp + 1;
+    nvp += size;
+    GROW(oop, vp, vpcap, nvp + 1);
+    GROW(int, vsz, vszcap, nvp + 1);
+    vsz[fb] = (int)size;
+    return fb;
+}
+
 static long alloc_frame(long size)
 {
     long fb;
@@ -19,10 +30,15 @@ static long alloc_frame(long size)
         fl_head[size] = vp[fb];
         return fb;
     }
-    fb = nvp + 1;
-    nvp += size;
-    GROW(oop, vp, vpcap, nvp + 1);
-    return fb;
+    return frame_new(size);
+}
+
+/* frames being executed are collector roots */
+static void act_push(long fb)
+{
+    nact++;
+    GROW(long, act_f, actcap, nact);
+    act_f[nact - 1] = fb;
 }
 
 static void init_temps(long base, long n)
@@ -160,9 +176,7 @@ static long frame_get(long size)
     if (nf > 0) {
         fl_head[size] = vp[nf];
     } else {
-        nf = nvp + 1;
-        nvp += size;
-        GROW(oop, vp, vpcap, nvp + 1);
+        nf = frame_new(size);
     }
     return nf;
 }
@@ -175,7 +189,8 @@ static oop invoke(int m, oop rcv, long base, int na)
     long nf, size, i, nt0;
     p = meths[m].prim;
     if (p > 0) {
-        r = prim(p, rcv, base, na);
+        GROW(oop, ast, astcap, base + 8);   /* primitives read ast[base+1..base+3] unconditionally */
+        r = prim_fn(p, rcv, base, na);
         if (unw > 0) return 0;
         if (r != 0) return r;
         if (NB(meths[m].body) == 0) {
@@ -206,7 +221,10 @@ static oop invoke(int m, oop rcv, long base, int na)
     }
     cs_m[cdepth] = m;
     cs_r[cdepth] = rcv;
+    act_push(nf);
+    GC_POINT();
     r = ev(meths[m].body, nf);
+    nact--;
     cdepth--;
     if (unw == UW_RET && unw_t == nf) {
         unw = UW_NONE;
@@ -239,7 +257,10 @@ static oop call_block(oop blk, long base, int na)
     vp[bf + 3] = vp[outer + 3];
     for (i = 1; i <= na; i++) vp[bf + 3 + i] = ast[base + i];
     for (i = na + 1; i <= NC(node); i++) vp[bf + 3 + i] = NIL_OOP;
+    act_push(bf);
+    GC_POINT();
     r = ev(NA(node), bf);
+    nact--;
     if (ND(node) == 0) {
         vp[bf] = fl_head[size];
         fl_head[size] = bf;
@@ -315,7 +336,7 @@ static int is_neg(oop x)
 static oop do_todo(long n, long fb)
 {
     oop a, b, st, v, r;
-    long x, y, s, slot, base;
+    long x, y, s, slot, base, vsl;
     EVAL(a, NA(n), fb);
     if (unw > 0) return 0;
     EVAL(b, NB(n), fb);
@@ -335,6 +356,7 @@ static oop do_todo(long n, long fb)
         }
         if (s > 0) {
             while (x <= y) {
+                GC_POINT();
                 vp[slot] = mkint(x);
                 v = ev(NC(n), fb);
                 if (unw > 0) return 0;
@@ -342,6 +364,7 @@ static oop do_todo(long n, long fb)
             }
         } else {
             while (x >= y) {
+                GC_POINT();
                 vp[slot] = mkint(x);
                 v = ev(NC(n), fb);
                 if (unw > 0) return 0;
@@ -350,35 +373,54 @@ static oop do_todo(long n, long fb)
         }
         return a;
     }
-    /* general numbers: use sends */
+    /* general numbers: use sends; the operands are kept on the argument stack */
+    ast_push(a);
+    ast_push(b);
+    ast_push(st);
+    ast_push(a);
+    vsl = asp;
     base = asp;
     v = a;
     for (;;) {
         asp = base;
+        ast[vsl] = v;
+        GC_POINT();
         ast_push(b);
         if (!is_neg(st)) r = send_sel(v, S_LE, base, 1);
         else r = send_sel(v, S_GE, base, 1);
         asp = base;
-        if (unw > 0) return 0;
+        if (unw > 0) {
+            asp = base - 4;
+            return 0;
+        }
         if (r != TRUE_OOP) break;
         vp[slot] = v;
         r = ev(NC(n), fb);
-        if (unw > 0) return 0;
+        if (unw > 0) {
+            asp = base - 4;
+            return 0;
+        }
         asp = base;
         ast_push(st);
         v = send_sel(v, S_ADD, base, 1);
         asp = base;
-        if (unw > 0) return 0;
+        if (unw > 0) {
+            asp = base - 4;
+            return 0;
+        }
     }
+    asp = base - 4;
     return a;
 }
 
 static oop do_cascade(long n, long fb)
 {
     oop rcv, v, r;
-    long i, k, j, base;
+    long i, k, j, base, cb0;
     EVAL(rcv, NA(n), fb);
     if (unw > 0) return 0;
+    ast_push(rcv);
+    cb0 = asp;
     r = NIL_OOP;
     for (i = NB(n); i < NB(n) + NC(n); i++) {
         k = al[i];
@@ -386,15 +428,19 @@ static oop do_cascade(long n, long fb)
         for (j = 0; j < NI(k); j++) {
             EVAL(v, al[NB(k) + j], fb);
             if (unw > 0) {
-                asp = base;
+                asp = cb0 - 1;
                 return 0;
             }
             ast_push(v);
         }
         r = send_sel(rcv, (int)NC(k), base, (int)NI(k));
         asp = base;
-        if (unw > 0) return 0;
+        if (unw > 0) {
+            asp = cb0 - 1;
+            return 0;
+        }
     }
+    asp = cb0 - 1;
     return r;
 }
 
@@ -473,6 +519,7 @@ static oop ev_slow(long n, long fb)
         return not_boolean(v, "ifTrue:");
     case ND_WHILE:
         for (;;) {
+            GC_POINT();
             v = ev(NA(n), fb);
             if (unw > 0) return 0;
             if (v == TRUE_OOP) c = 1;
@@ -504,6 +551,7 @@ static oop ev_slow(long n, long fb)
         if (!IS_INT(v)) return not_number(v, "timesRepeat:");
         lim = intval(v);
         for (i = 1; i <= lim; i++) {
+            GC_POINT();
             ev(NB(n), fb);
             if (unw > 0) return 0;
         }
@@ -522,6 +570,7 @@ static oop ev_slow(long n, long fb)
         return v;
     case ND_REPEAT:
         for (;;) {
+            GC_POINT();
             ev(NA(n), fb);
             if (unw > 0) return 0;
         }
@@ -534,12 +583,17 @@ static oop ev_slow(long n, long fb)
     case ND_BRACE:
         c = NB(n);
         v = mkarray(c);
+        ast_push(v);
         for (i = 0; i < c; i++) {
             oop e;
             e = ev(al[NA(n) + i], fb);
-            if (unw > 0) return 0;
+            if (unw > 0) {
+                asp--;
+                return 0;
+            }
             sl[objs[HI(v)].slot + i] = e;
         }
+        asp--;
         return v;
     case ND_THISCTX: return make_context();
     default: break;
@@ -579,12 +633,16 @@ static oop do_send(long n, long fb)
         if (unw > 0) return 0;
         c = 0;
     }
+    /* the receiver stays on the argument stack (a collector root) during the send */
+    asp++;
+    if (asp >= astcap) ast = (oop *)xgrow(ast, &astcap, asp, sizeof(oop));
+    ast[asp] = rcv;
     base = asp;
     f = nodes[n].b;
     for (i = 0; i < na; i++) {
         EVAL(v, al[f + i], fb);
         if (unw > 0) {
-            asp = base;
+            asp = base - 1;
             return 0;
         }
         asp++;
@@ -600,29 +658,29 @@ static oop do_send(long n, long fb)
             switch (sel) {
             case S_ADD:
                 r = x + y;
-                if (r >= SI_MIN && r <= SI_MAX) { asp = base; return MKINT(r); }
+                if (r >= SI_MIN && r <= SI_MAX) { asp = base - 1; return MKINT(r); }
                 break;
             case S_SUB:
                 r = x - y;
-                if (r >= SI_MIN && r <= SI_MAX) { asp = base; return MKINT(r); }
+                if (r >= SI_MIN && r <= SI_MAX) { asp = base - 1; return MKINT(r); }
                 break;
             case S_MUL:
                 if (x > -SI_MULLIM && x < SI_MULLIM && y > -SI_MULLIM && y < SI_MULLIM) {
-                    asp = base;
+                    asp = base - 1;
                     return MKINT(x * y);
                 }
                 break;
-            case S_LT: asp = base; return x < y ? TRUE_OOP : FALSE_OOP;
-            case S_GT: asp = base; return x > y ? TRUE_OOP : FALSE_OOP;
-            case S_LE: asp = base; return x <= y ? TRUE_OOP : FALSE_OOP;
-            case S_GE: asp = base; return x >= y ? TRUE_OOP : FALSE_OOP;
-            case S_EQ: asp = base; return x == y ? TRUE_OOP : FALSE_OOP;
-            case S_NE: asp = base; return x != y ? TRUE_OOP : FALSE_OOP;
+            case S_LT: asp = base - 1; return x < y ? TRUE_OOP : FALSE_OOP;
+            case S_GT: asp = base - 1; return x > y ? TRUE_OOP : FALSE_OOP;
+            case S_LE: asp = base - 1; return x <= y ? TRUE_OOP : FALSE_OOP;
+            case S_GE: asp = base - 1; return x >= y ? TRUE_OOP : FALSE_OOP;
+            case S_EQ: asp = base - 1; return x == y ? TRUE_OOP : FALSE_OOP;
+            case S_NE: asp = base - 1; return x != y ? TRUE_OOP : FALSE_OOP;
             case S_IDIV:
                 if (y != 0) {
                     long q, rm;
                     floor_divmod(x, y, &q, &rm);
-                    asp = base;
+                    asp = base - 1;
                     return MKINT(q);
                 }
                 break;
@@ -630,7 +688,7 @@ static oop do_send(long n, long fb)
                 if (y != 0) {
                     long q, rm;
                     floor_divmod(x, y, &q, &rm);
-                    asp = base;
+                    asp = base - 1;
                     return MKINT(rm);
                 }
                 break;
@@ -639,11 +697,11 @@ static oop do_send(long n, long fb)
             }
         }
         if (sel == S_IDENT) {
-            asp = base;
+            asp = base - 1;
             return rcv == v ? TRUE_OOP : FALSE_OOP;
         }
         if (sel == S_NIDENT) {
-            asp = base;
+            asp = base - 1;
             return rcv == v ? FALSE_OOP : TRUE_OOP;
         }
     }
@@ -651,7 +709,7 @@ static oop do_send(long n, long fb)
     m = lookup(c, sel);
     if (m == 0) v = send_dnu(rcv, sel, base, (int)na);
     else v = invoke(m, rcv, base, (int)na);
-    asp = base;
+    asp = base - 1;
     return v;
 }
 

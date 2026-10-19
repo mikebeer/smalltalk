@@ -231,7 +231,7 @@ static void smap_grow(SMap *m)
     unsigned char *ou = m->used;
     long oc = m->cap;
     long i, j;
-    m->cap = oc * 2;
+    m->cap = (m->cnt * 2 > oc) ? oc * 2 : oc;   /* only rehash when mostly tombstones */
     m->keys = (char **)xmalloc(sizeof(char *) * (size_t)m->cap);
     m->vals = (long *)xmalloc(sizeof(long) * (size_t)m->cap);
     m->used = (unsigned char *)xmalloc((size_t)m->cap);
@@ -352,17 +352,24 @@ static long intval(oop x)
 
 static oop newobj(int cls_, int kind, long n)
 {
-    long i;
-    no++;
-    GROW(Obj, objs, objcap, no);
-    objs[no].cls = cls_;
-    objs[no].kind = kind;
-    objs[no].n = n;
-    objs[no].x = 0;
-    objs[no].s = NULL;
-    objs[no].slen = 0;
-    objs[no].f = 0.0;
-    objs[no].slot = nsl + 1;
+    long i, ix;
+    if (ofree > 0) {
+        ix = ofree;
+        ofree = objs[ix].x;
+    } else {
+        no++;
+        GROW(Obj, objs, objcap, no);
+        ix = no;
+    }
+    gc_alloc += (double)sizeof(Obj) + 16.0 + (double)n * (double)sizeof(oop);
+    objs[ix].cls = cls_;
+    objs[ix].kind = kind;
+    objs[ix].n = n;
+    objs[ix].x = 0;
+    objs[ix].s = NULL;
+    objs[ix].slen = 0;
+    objs[ix].f = 0.0;
+    objs[ix].slot = nsl + 1;
     if (n > 0) {
         GROW(oop, sl, slcap, nsl + n);
         for (i = 1; i <= n; i++) {
@@ -370,7 +377,7 @@ static oop newobj(int cls_, int kind, long n)
             sl[nsl] = NIL_OOP;
         }
     }
-    return no * 2L;
+    return ix * 2L;
 }
 
 static void set_str(oop o, const char *s, long n)
@@ -379,6 +386,7 @@ static void set_str(oop o, const char *s, long n)
     if (objs[HI(o)].s != NULL) free(objs[HI(o)].s);
     objs[HI(o)].s = p;
     objs[HI(o)].slen = n;
+    gc_alloc += (double)n + 16.0;
 }
 
 static oop mkstrn(const char *s, long n)
@@ -902,6 +910,7 @@ static oop new_instance(int c, long n)
             if (objs[HI(o)].s != NULL) free(objs[HI(o)].s);
             objs[HI(o)].s = sp;
             objs[HI(o)].slen = n;
+            gc_alloc += (double)n + 16.0;
         }
         return o;
     case KD_DICT:

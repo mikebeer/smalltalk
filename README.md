@@ -47,7 +47,7 @@ it afterwards. Set `CREXX` to the `crexx` driver if it is not on your `PATH`.
 * Dictionary/Set keys use built-in equality (numbers, strings, symbols, characters, arrays of
   those) or identity for other objects; a user-defined `=`/`hash` is not consulted.
 * `Dictionary printNl` shows `a Dictionary (k->v )`; Sets and Dictionaries iterate in insertion order.
-* There is no garbage collector; objects live until the program ends.
+* There is no garbage collector in the CREXX version; objects live until the program ends. (The C89 version in `c/` has a mark-and-sweep collector.)
 * No processes, no `thisContext`, no class-definition bang (`!`) chunk format.
 
 ## Manual

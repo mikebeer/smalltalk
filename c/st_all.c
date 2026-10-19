@@ -168,6 +168,22 @@ static int cls_LargePositiveInteger, cls_LargeNegativeInteger;
 static int cls_BlockClosure, cls_UndefinedObject, cls_Message;
 static oop chr_oop[256];
 
+/* ---- garbage collector state (s_gc.c) ----------------------------------- */
+#define KD_FREE 99
+static long ofree;                 /* head of the free object list (chained by .x) */
+static double gc_alloc, gc_next;   /* bytes allocated since the last GC, trigger */
+static int gc_on = 1;              /* 0 with -nogc */
+static long gc_stress, gc_tick;    /* -gcstress=N: collect at every N-th safe point */
+static long gc_count, gc_freed;    /* statistics */
+static int gc_verbose;
+static int *vsz;                   /* size of the frame starting at vp index i */
+static long vszcap;
+static long *act_f;                /* frames being executed (GC roots) */
+static long nact, actcap;
+static long hmax;                  /* highest handler stack index ever used */
+static long de_free, dd_free;      /* free dictionary entries / dictionary ids */
+#define GC_POINT() do { if (gc_alloc >= gc_next) gc_point(); } while (0)
+
 /* ---- state ------------------------------------------------------------ */
 static int booted, halted, rc_exit, repl_mode, repl_echo, in_eval;
 static int stdin_eof;
@@ -292,6 +308,8 @@ static void init_temps(long base, long n);
 static long alloc_frame(long size);
 static char *printstr0(oop x);   /* malloc'ed */
 static oop make_context(void);
+static void gc_point(void);
+static void act_push(long fb);
 static void ast_push(oop v);
 
 /* ---- prototypes: primitives (s7..s9) ----------------------------------
@@ -302,6 +320,9 @@ static oop prim_a(int p, oop rcv, long base, int na);   /* numbers, objects, ref
 static oop prim_b(int p, oop rcv, long base, int na);   /* strings, arrays, dictionaries */
 static oop prim_c(int p, oop rcv, long base, int na);   /* blocks, exceptions, classes, system */
 static oop prim_net(int p, oop rcv, long base, int na); /* sockets (stubs) */
+/* primitives are called through a pointer set at start-up so that compilers do not
+   inline their large locals into invoke(): this keeps the C stack per Smalltalk call small */
+static oop (*prim_fn)(int, oop, long, int);
 
 /* numbers (s7) */
 static int numkind(oop x);                  /* 0 none, 1 SmallInteger, 2 big, 3 float */
@@ -1102,7 +1123,7 @@ static void smap_grow(SMap *m)
     unsigned char *ou = m->used;
     long oc = m->cap;
     long i, j;
-    m->cap = oc * 2;
+    m->cap = (m->cnt * 2 > oc) ? oc * 2 : oc;   /* only rehash when mostly tombstones */
     m->keys = (char **)xmalloc(sizeof(char *) * (size_t)m->cap);
     m->vals = (long *)xmalloc(sizeof(long) * (size_t)m->cap);
     m->used = (unsigned char *)xmalloc((size_t)m->cap);
@@ -1223,17 +1244,24 @@ static long intval(oop x)
 
 static oop newobj(int cls_, int kind, long n)
 {
-    long i;
-    no++;
-    GROW(Obj, objs, objcap, no);
-    objs[no].cls = cls_;
-    objs[no].kind = kind;
-    objs[no].n = n;
-    objs[no].x = 0;
-    objs[no].s = NULL;
-    objs[no].slen = 0;
-    objs[no].f = 0.0;
-    objs[no].slot = nsl + 1;
+    long i, ix;
+    if (ofree > 0) {
+        ix = ofree;
+        ofree = objs[ix].x;
+    } else {
+        no++;
+        GROW(Obj, objs, objcap, no);
+        ix = no;
+    }
+    gc_alloc += (double)sizeof(Obj) + 16.0 + (double)n * (double)sizeof(oop);
+    objs[ix].cls = cls_;
+    objs[ix].kind = kind;
+    objs[ix].n = n;
+    objs[ix].x = 0;
+    objs[ix].s = NULL;
+    objs[ix].slen = 0;
+    objs[ix].f = 0.0;
+    objs[ix].slot = nsl + 1;
     if (n > 0) {
         GROW(oop, sl, slcap, nsl + n);
         for (i = 1; i <= n; i++) {
@@ -1241,7 +1269,7 @@ static oop newobj(int cls_, int kind, long n)
             sl[nsl] = NIL_OOP;
         }
     }
-    return no * 2L;
+    return ix * 2L;
 }
 
 static void set_str(oop o, const char *s, long n)
@@ -1250,6 +1278,7 @@ static void set_str(oop o, const char *s, long n)
     if (objs[HI(o)].s != NULL) free(objs[HI(o)].s);
     objs[HI(o)].s = p;
     objs[HI(o)].slen = n;
+    gc_alloc += (double)n + 16.0;
 }
 
 static oop mkstrn(const char *s, long n)
@@ -1773,6 +1802,7 @@ static oop new_instance(int c, long n)
             if (objs[HI(o)].s != NULL) free(objs[HI(o)].s);
             objs[HI(o)].s = sp;
             objs[HI(o)].slen = n;
+            gc_alloc += (double)n + 16.0;
         }
         return o;
     case KD_DICT:
@@ -3606,7 +3636,9 @@ static oop run_seq_in(int c, long st, long *keepfb)
     vp[fb + 3] = 0;
     init_temps(fb + 4, sc_max[1]);
     if (keepfb != NULL) *keepfb = fb;
+    act_push(fb);
     v = ev(seq, fb);
+    nact--;
     return v;
 }
 
@@ -3614,11 +3646,13 @@ static oop run_seq_in(int c, long st, long *keepfb)
 static void run_doit(long st)
 {
     oop v, er;
-    long eb;
+    long eb, ab0;
     cdepth = 0;
     unw = UW_NONE;
     htop = 0;
+    ab0 = asp;
     v = run_seq_in(cls_UndefinedObject, st, NULL);
+    ast_push(v);   /* the value stays a collector root while the scheduler runs */
     if (unw == 0 && in_eval == 0) run_scheduler();
     if (repl_echo == 1 && unw == 0 && v != NIL_OOP) {
         if (cof(v) != find_class("TextCollector")) {
@@ -3641,6 +3675,7 @@ static void run_doit(long st)
         if (unw == UW_EXIT) halted = 1;
         unw = UW_NONE;
     }
+    asp = ab0;
     htop = 0;
 }
 
@@ -3683,7 +3718,9 @@ static oop eval_string(const char *text)
         vp[fb + 2] = NIL_OOP;
         vp[fb + 3] = 0;
         init_temps(fb + 4, sc_max[1]);
+        act_push(fb);
         v = ev(seq, fb);
+        nact--;
         if (unw == UW_RET) {
             unw = UW_NONE;
             v = unw_v;
@@ -3735,6 +3772,17 @@ static void fl_need(long size)
     }
 }
 
+/* a new frame at the end of vp; its size is recorded for the collector */
+static long frame_new(long size)
+{
+    long fb = nvp + 1;
+    nvp += size;
+    GROW(oop, vp, vpcap, nvp + 1);
+    GROW(int, vsz, vszcap, nvp + 1);
+    vsz[fb] = (int)size;
+    return fb;
+}
+
 static long alloc_frame(long size)
 {
     long fb;
@@ -3744,10 +3792,15 @@ static long alloc_frame(long size)
         fl_head[size] = vp[fb];
         return fb;
     }
-    fb = nvp + 1;
-    nvp += size;
-    GROW(oop, vp, vpcap, nvp + 1);
-    return fb;
+    return frame_new(size);
+}
+
+/* frames being executed are collector roots */
+static void act_push(long fb)
+{
+    nact++;
+    GROW(long, act_f, actcap, nact);
+    act_f[nact - 1] = fb;
 }
 
 static void init_temps(long base, long n)
@@ -3885,9 +3938,7 @@ static long frame_get(long size)
     if (nf > 0) {
         fl_head[size] = vp[nf];
     } else {
-        nf = nvp + 1;
-        nvp += size;
-        GROW(oop, vp, vpcap, nvp + 1);
+        nf = frame_new(size);
     }
     return nf;
 }
@@ -3900,7 +3951,8 @@ static oop invoke(int m, oop rcv, long base, int na)
     long nf, size, i, nt0;
     p = meths[m].prim;
     if (p > 0) {
-        r = prim(p, rcv, base, na);
+        GROW(oop, ast, astcap, base + 8);   /* primitives read ast[base+1..base+3] unconditionally */
+        r = prim_fn(p, rcv, base, na);
         if (unw > 0) return 0;
         if (r != 0) return r;
         if (NB(meths[m].body) == 0) {
@@ -3931,7 +3983,10 @@ static oop invoke(int m, oop rcv, long base, int na)
     }
     cs_m[cdepth] = m;
     cs_r[cdepth] = rcv;
+    act_push(nf);
+    GC_POINT();
     r = ev(meths[m].body, nf);
+    nact--;
     cdepth--;
     if (unw == UW_RET && unw_t == nf) {
         unw = UW_NONE;
@@ -3964,7 +4019,10 @@ static oop call_block(oop blk, long base, int na)
     vp[bf + 3] = vp[outer + 3];
     for (i = 1; i <= na; i++) vp[bf + 3 + i] = ast[base + i];
     for (i = na + 1; i <= NC(node); i++) vp[bf + 3 + i] = NIL_OOP;
+    act_push(bf);
+    GC_POINT();
     r = ev(NA(node), bf);
+    nact--;
     if (ND(node) == 0) {
         vp[bf] = fl_head[size];
         fl_head[size] = bf;
@@ -4040,7 +4098,7 @@ static int is_neg(oop x)
 static oop do_todo(long n, long fb)
 {
     oop a, b, st, v, r;
-    long x, y, s, slot, base;
+    long x, y, s, slot, base, vsl;
     EVAL(a, NA(n), fb);
     if (unw > 0) return 0;
     EVAL(b, NB(n), fb);
@@ -4060,6 +4118,7 @@ static oop do_todo(long n, long fb)
         }
         if (s > 0) {
             while (x <= y) {
+                GC_POINT();
                 vp[slot] = mkint(x);
                 v = ev(NC(n), fb);
                 if (unw > 0) return 0;
@@ -4067,6 +4126,7 @@ static oop do_todo(long n, long fb)
             }
         } else {
             while (x >= y) {
+                GC_POINT();
                 vp[slot] = mkint(x);
                 v = ev(NC(n), fb);
                 if (unw > 0) return 0;
@@ -4075,35 +4135,54 @@ static oop do_todo(long n, long fb)
         }
         return a;
     }
-    /* general numbers: use sends */
+    /* general numbers: use sends; the operands are kept on the argument stack */
+    ast_push(a);
+    ast_push(b);
+    ast_push(st);
+    ast_push(a);
+    vsl = asp;
     base = asp;
     v = a;
     for (;;) {
         asp = base;
+        ast[vsl] = v;
+        GC_POINT();
         ast_push(b);
         if (!is_neg(st)) r = send_sel(v, S_LE, base, 1);
         else r = send_sel(v, S_GE, base, 1);
         asp = base;
-        if (unw > 0) return 0;
+        if (unw > 0) {
+            asp = base - 4;
+            return 0;
+        }
         if (r != TRUE_OOP) break;
         vp[slot] = v;
         r = ev(NC(n), fb);
-        if (unw > 0) return 0;
+        if (unw > 0) {
+            asp = base - 4;
+            return 0;
+        }
         asp = base;
         ast_push(st);
         v = send_sel(v, S_ADD, base, 1);
         asp = base;
-        if (unw > 0) return 0;
+        if (unw > 0) {
+            asp = base - 4;
+            return 0;
+        }
     }
+    asp = base - 4;
     return a;
 }
 
 static oop do_cascade(long n, long fb)
 {
     oop rcv, v, r;
-    long i, k, j, base;
+    long i, k, j, base, cb0;
     EVAL(rcv, NA(n), fb);
     if (unw > 0) return 0;
+    ast_push(rcv);
+    cb0 = asp;
     r = NIL_OOP;
     for (i = NB(n); i < NB(n) + NC(n); i++) {
         k = al[i];
@@ -4111,15 +4190,19 @@ static oop do_cascade(long n, long fb)
         for (j = 0; j < NI(k); j++) {
             EVAL(v, al[NB(k) + j], fb);
             if (unw > 0) {
-                asp = base;
+                asp = cb0 - 1;
                 return 0;
             }
             ast_push(v);
         }
         r = send_sel(rcv, (int)NC(k), base, (int)NI(k));
         asp = base;
-        if (unw > 0) return 0;
+        if (unw > 0) {
+            asp = cb0 - 1;
+            return 0;
+        }
     }
+    asp = cb0 - 1;
     return r;
 }
 
@@ -4198,6 +4281,7 @@ static oop ev_slow(long n, long fb)
         return not_boolean(v, "ifTrue:");
     case ND_WHILE:
         for (;;) {
+            GC_POINT();
             v = ev(NA(n), fb);
             if (unw > 0) return 0;
             if (v == TRUE_OOP) c = 1;
@@ -4229,6 +4313,7 @@ static oop ev_slow(long n, long fb)
         if (!IS_INT(v)) return not_number(v, "timesRepeat:");
         lim = intval(v);
         for (i = 1; i <= lim; i++) {
+            GC_POINT();
             ev(NB(n), fb);
             if (unw > 0) return 0;
         }
@@ -4247,6 +4332,7 @@ static oop ev_slow(long n, long fb)
         return v;
     case ND_REPEAT:
         for (;;) {
+            GC_POINT();
             ev(NA(n), fb);
             if (unw > 0) return 0;
         }
@@ -4259,12 +4345,17 @@ static oop ev_slow(long n, long fb)
     case ND_BRACE:
         c = NB(n);
         v = mkarray(c);
+        ast_push(v);
         for (i = 0; i < c; i++) {
             oop e;
             e = ev(al[NA(n) + i], fb);
-            if (unw > 0) return 0;
+            if (unw > 0) {
+                asp--;
+                return 0;
+            }
             sl[objs[HI(v)].slot + i] = e;
         }
+        asp--;
         return v;
     case ND_THISCTX: return make_context();
     default: break;
@@ -4304,12 +4395,16 @@ static oop do_send(long n, long fb)
         if (unw > 0) return 0;
         c = 0;
     }
+    /* the receiver stays on the argument stack (a collector root) during the send */
+    asp++;
+    if (asp >= astcap) ast = (oop *)xgrow(ast, &astcap, asp, sizeof(oop));
+    ast[asp] = rcv;
     base = asp;
     f = nodes[n].b;
     for (i = 0; i < na; i++) {
         EVAL(v, al[f + i], fb);
         if (unw > 0) {
-            asp = base;
+            asp = base - 1;
             return 0;
         }
         asp++;
@@ -4325,29 +4420,29 @@ static oop do_send(long n, long fb)
             switch (sel) {
             case S_ADD:
                 r = x + y;
-                if (r >= SI_MIN && r <= SI_MAX) { asp = base; return MKINT(r); }
+                if (r >= SI_MIN && r <= SI_MAX) { asp = base - 1; return MKINT(r); }
                 break;
             case S_SUB:
                 r = x - y;
-                if (r >= SI_MIN && r <= SI_MAX) { asp = base; return MKINT(r); }
+                if (r >= SI_MIN && r <= SI_MAX) { asp = base - 1; return MKINT(r); }
                 break;
             case S_MUL:
                 if (x > -SI_MULLIM && x < SI_MULLIM && y > -SI_MULLIM && y < SI_MULLIM) {
-                    asp = base;
+                    asp = base - 1;
                     return MKINT(x * y);
                 }
                 break;
-            case S_LT: asp = base; return x < y ? TRUE_OOP : FALSE_OOP;
-            case S_GT: asp = base; return x > y ? TRUE_OOP : FALSE_OOP;
-            case S_LE: asp = base; return x <= y ? TRUE_OOP : FALSE_OOP;
-            case S_GE: asp = base; return x >= y ? TRUE_OOP : FALSE_OOP;
-            case S_EQ: asp = base; return x == y ? TRUE_OOP : FALSE_OOP;
-            case S_NE: asp = base; return x != y ? TRUE_OOP : FALSE_OOP;
+            case S_LT: asp = base - 1; return x < y ? TRUE_OOP : FALSE_OOP;
+            case S_GT: asp = base - 1; return x > y ? TRUE_OOP : FALSE_OOP;
+            case S_LE: asp = base - 1; return x <= y ? TRUE_OOP : FALSE_OOP;
+            case S_GE: asp = base - 1; return x >= y ? TRUE_OOP : FALSE_OOP;
+            case S_EQ: asp = base - 1; return x == y ? TRUE_OOP : FALSE_OOP;
+            case S_NE: asp = base - 1; return x != y ? TRUE_OOP : FALSE_OOP;
             case S_IDIV:
                 if (y != 0) {
                     long q, rm;
                     floor_divmod(x, y, &q, &rm);
-                    asp = base;
+                    asp = base - 1;
                     return MKINT(q);
                 }
                 break;
@@ -4355,7 +4450,7 @@ static oop do_send(long n, long fb)
                 if (y != 0) {
                     long q, rm;
                     floor_divmod(x, y, &q, &rm);
-                    asp = base;
+                    asp = base - 1;
                     return MKINT(rm);
                 }
                 break;
@@ -4364,11 +4459,11 @@ static oop do_send(long n, long fb)
             }
         }
         if (sel == S_IDENT) {
-            asp = base;
+            asp = base - 1;
             return rcv == v ? TRUE_OOP : FALSE_OOP;
         }
         if (sel == S_NIDENT) {
-            asp = base;
+            asp = base - 1;
             return rcv == v ? FALSE_OOP : TRUE_OOP;
         }
     }
@@ -4376,7 +4471,7 @@ static oop do_send(long n, long fb)
     m = lookup(c, sel);
     if (m == 0) v = send_dnu(rcv, sel, base, (int)na);
     else v = invoke(m, rcv, base, (int)na);
-    asp = base;
+    asp = base - 1;
     return v;
 }
 
@@ -5570,15 +5665,20 @@ static oop dict_new(int c)
     long d;
     long cp;
 
-    nd0 = nd0 + 1;
-    d = nd0;
-    cp = ddcap;
-    dd_head = (long *)xgrow(dd_head, &cp, d + 1, sizeof(long));
-    cp = ddcap;
-    dd_tail = (long *)xgrow(dd_tail, &cp, d + 1, sizeof(long));
-    cp = ddcap;
-    dd_n = (long *)xgrow(dd_n, &cp, d + 1, sizeof(long));
-    ddcap = cp;
+    if (dd_free > 0) {
+        d = dd_free;
+        dd_free = dd_head[d];
+    } else {
+        nd0 = nd0 + 1;
+        d = nd0;
+        cp = ddcap;
+        dd_head = (long *)xgrow(dd_head, &cp, d + 1, sizeof(long));
+        cp = ddcap;
+        dd_tail = (long *)xgrow(dd_tail, &cp, d + 1, sizeof(long));
+        cp = ddcap;
+        dd_n = (long *)xgrow(dd_n, &cp, d + 1, sizeof(long));
+        ddcap = cp;
+    }
     dd_head[d] = 0;
     dd_tail[d] = 0;
     dd_n[d] = 0;
@@ -5605,6 +5705,7 @@ static void dict_put(oop o, oop key, oop val)
     long e;
     long d;
     long cp;
+    long en;
     char *k;
 
     e = dict_find(o, key);
@@ -5613,26 +5714,33 @@ static void dict_put(oop o, oop key, oop val)
         return;
     }
     d = S8X(o);
-    ne = ne + 1;
-    cp = decap;
-    de_key = (oop *)xgrow(de_key, &cp, ne + 1, sizeof(oop));
-    cp = decap;
-    de_val = (oop *)xgrow(de_val, &cp, ne + 1, sizeof(oop));
-    cp = decap;
-    de_next = (long *)xgrow(de_next, &cp, ne + 1, sizeof(long));
-    cp = decap;
-    de_live = (int *)xgrow(de_live, &cp, ne + 1, sizeof(int));
-    decap = cp;
-    de_key[ne] = key;
-    de_val[ne] = val;
-    de_next[ne] = 0;
-    de_live[ne] = 1;
-    if (dd_tail[d] == 0) dd_head[d] = ne;
-    else de_next[dd_tail[d]] = ne;
-    dd_tail[d] = ne;
+    gc_alloc += 96.0;
+    if (de_free > 0) {
+        en = de_free;
+        de_free = de_next[en];
+    } else {
+        ne = ne + 1;
+        en = ne;
+        cp = decap;
+        de_key = (oop *)xgrow(de_key, &cp, ne + 1, sizeof(oop));
+        cp = decap;
+        de_val = (oop *)xgrow(de_val, &cp, ne + 1, sizeof(oop));
+        cp = decap;
+        de_next = (long *)xgrow(de_next, &cp, ne + 1, sizeof(long));
+        cp = decap;
+        de_live = (int *)xgrow(de_live, &cp, ne + 1, sizeof(int));
+        decap = cp;
+    }
+    de_key[en] = key;
+    de_val[en] = val;
+    de_next[en] = 0;
+    de_live[en] = 1;
+    if (dd_tail[d] == 0) dd_head[d] = en;
+    else de_next[dd_tail[d]] = en;
+    dd_tail[d] = en;
     dd_n[d] = dd_n[d] + 1;
     k = dict_ckey(d, key);
-    smap_put(&dmap, k, ne);
+    smap_put(&dmap, k, en);
     free(k);
 }
 
@@ -5832,8 +5940,10 @@ static oop prim_b(int p, oop rcv, long base, int na)
         memcpy(buf, OS(rcv), (size_t)n);
         memcpy(buf + n, OS(a1), (size_t)len);
         buf[n + len] = '\0';
-        r = mkstrn(buf, n + len);
-        free(buf);
+        r = newobj(cls_String, KD_STR, 0);   /* takes over buf */
+        OS(r) = buf;
+        OSLEN(r) = n + len;
+        gc_alloc += (double)(n + len) + 16.0;
         return r;
 
     case PR_STRCOPY:
@@ -6573,6 +6683,7 @@ static oop prim_c(int p, oop rcv, long base, int na)
             h_cls[htop] = a1;
             h_blk[htop] = a2;
             h_id[htop] = id;
+            if (htop > hmax) hmax = htop;
             v = call_block(rcv, asp, 0);
             htop = oldtop;
             if (unw == UW_EXC && unw_t == id) {
@@ -6597,7 +6708,11 @@ static oop prim_c(int p, oop rcv, long base, int na)
         sv_v = unw_v;
         oldtop = htop;
         unw = UW_NONE;
+        b2 = asp;
+        ast_push(v);      /* keep the results of the protected block and of */
+        ast_push(sv_v);   /* an unwinding in progress alive during the ensure block */
         r = call_block(a1, asp, 0);
+        asp = b2;
         htop = oldtop;
         if (unw == UW_NONE) {
             unw = sv_u;
@@ -7012,6 +7127,270 @@ static oop prim_net(int p, oop rcv, long base, int na)
         st_error(NIL_OOP, "networking is not available in this build (C port)");
     return 0;
 }
+/* ===== s_gc.c ===== */
+/* =========================================================================
+   s_gc.c   precise mark-and-sweep garbage collector
+
+   Heap objects are entries of the object table objs[]; an oop is the index
+   (times two), so objects never move and the table is swept in place.  A
+   collection runs only at a safe point (GC_POINT: method and block entry,
+   loop iterations), when every live reference is in one of
+     - the globals, class table, symbols, literals of the syntax tree,
+     - the argument stack ast[] (receivers and arguments of sends in
+       progress are kept there), the call stack, the handler stack,
+     - the frames being executed (act_f[]) and the frames reachable from
+       blocks (their slots, outer and home frames).
+   C locals of primitives are never roots: a primitive allocates without
+   collecting; only the callbacks it makes (blocks, sends) are safe points
+   and the few callers that hold an oop across one push it on ast[].
+
+   mark:  explicit stack (no recursion), object and frame mark bytes
+   sweep: free objects go to a list chained through .x, their strings are
+          freed; dead dictionary entries are recycled; frames are rebuilt
+          into the free lists; the slot array sl[] is compacted when more
+          than half of it is dead.
+   The trigger is the volume allocated since the last collection, compared
+   with max(GC_MIN, live volume after the last one).
+   ========================================================================= */
+#define GC_MIN 4000000.0
+
+static unsigned char *gm;     /* object mark bytes */
+static unsigned char *gfm;    /* frame mark bytes, indexed by frame start */
+static long *gstk;            /* work stack: > 0 object index, < 0 frame start */
+static long gsp, gscap;
+
+static void gpush(long v)
+{
+    gsp++;
+    if (gsp >= gscap) gstk = (long *)xgrow(gstk, &gscap, gsp, sizeof(long));
+    gstk[gsp] = v;
+}
+
+static void gmark(oop x)
+{
+    long i;
+    if (IS_INT(x) || x <= 0) return;
+    i = HI(x);
+    if (i < 1 || i > no) return;
+    if (objs[i].kind == KD_FREE || gm[i]) return;
+    gm[i] = 1;
+    gpush(i);
+}
+
+static void gmark_frame(long f)
+{
+    if (f < 2 || f > nvp || gfm[f]) return;
+    gfm[f] = 1;
+    gpush(-f);
+}
+
+static void gdrain(void)
+{
+    long t, i, j, e, d, prev, nx, f, sz;
+    while (gsp > 0) {
+        t = gstk[gsp];
+        gsp--;
+        if (t < 0) {
+            f = -t;
+            sz = vsz[f];
+            gmark(vp[f + 2]);
+            for (j = 4; j < sz; j++) gmark(vp[f + j]);
+            gmark_frame(vp[f]);
+            gmark_frame(vp[f + 1]);
+            continue;
+        }
+        i = t;
+        for (j = 0; j < objs[i].n; j++) gmark(sl[objs[i].slot + j]);
+        if (objs[i].kind == KD_BLK) {
+            gmark_frame(objs[i].slot);
+        } else if (objs[i].kind == KD_DICT && objs[i].x > 0) {
+            d = objs[i].x;
+            e = dd_head[d];
+            prev = 0;
+            while (e > 0) {
+                nx = de_next[e];
+                if (de_live[e] == 1) {
+                    gmark(de_key[e]);
+                    gmark(de_val[e]);
+                    prev = e;
+                } else {
+                    /* removed entry: unlink and recycle */
+                    if (prev == 0) dd_head[d] = nx;
+                    else de_next[prev] = nx;
+                    if (dd_tail[d] == e) dd_tail[d] = prev;
+                    de_next[e] = de_free;
+                    de_free = e;
+                }
+                e = nx;
+            }
+        }
+    }
+}
+
+/* a dictionary that died: forget its entries in the lookup map and recycle them */
+static void gc_release_dict(long d)
+{
+    long e, nx;
+    char *k;
+    e = dd_head[d];
+    while (e > 0) {
+        nx = de_next[e];
+        if (de_live[e] == 1) {
+            k = dict_ckey(d, de_key[e]);
+            smap_del(&dmap, k);
+            free(k);
+        }
+        de_live[e] = 0;
+        de_next[e] = de_free;
+        de_free = e;
+        e = nx;
+    }
+    dd_head[d] = dd_free;
+    dd_tail[d] = 0;
+    dd_n[d] = 0;
+    dd_free = d;
+}
+
+static void gc_compact_slots(void)
+{
+    oop *ns;
+    long i, j, k, live, cap;
+    live = 0;
+    for (i = 1; i <= no; i++) {
+        if (objs[i].kind != KD_FREE && objs[i].n > 0) live += objs[i].n;
+    }
+    cap = live + 64;
+    ns = (oop *)xmalloc((size_t)cap * sizeof(oop));
+    ns[0] = 0;
+    k = 0;
+    for (i = 1; i <= no; i++) {
+        if (objs[i].kind == KD_FREE || objs[i].n <= 0) continue;
+        j = objs[i].slot;
+        memcpy(ns + k + 1, sl + j, (size_t)objs[i].n * sizeof(oop));
+        objs[i].slot = k + 1;
+        k += objs[i].n;
+    }
+    free(sl);
+    sl = ns;
+    slcap = cap;
+    nsl = k;
+}
+
+static void gc_run(void)
+{
+    long i, f, sz, deadslots, liveobj;
+    double livebytes;
+
+    gc_count++;
+    gm = (unsigned char *)xmalloc((size_t)no + 2);
+    memset(gm, 0, (size_t)no + 2);
+    gfm = (unsigned char *)xmalloc((size_t)nvp + 2);
+    memset(gfm, 0, (size_t)nvp + 2);
+    gsp = 0;
+
+    /* roots */
+    gmark(NIL_OOP);
+    gmark(TRUE_OOP);
+    gmark(FALSE_OOP);
+    for (i = 1; i <= ng; i++) gmark(g_val[i]);
+    for (i = 0; i < 256; i++) gmark(chr_oop[i]);
+    for (i = 1; i <= nc; i++) gmark(cls[i].oop_);
+    for (i = 1; i <= no; i++) {
+        int k = objs[i].kind;
+        if (k == KD_SYM || k == KD_CLS || k == KD_META || k == KD_CHR) gmark(i * 2L);
+    }
+    for (i = 1; i <= nnode; i++) {
+        if (nodes[i].t == ND_LIT) gmark(nodes[i].a);
+    }
+    for (i = 1; i <= asp; i++) gmark(ast[i]);
+    for (i = 1; i <= cdepth; i++) gmark(cs_r[i]);
+    gmark(unw_v);
+    for (i = 1; i <= hmax; i++) {
+        gmark(h_cls[i]);
+        gmark(h_blk[i]);
+    }
+    for (i = 0; i < nact; i++) gmark_frame(act_f[i]);
+    gdrain();
+
+    /* dead dictionaries, then the objects */
+    for (i = 1; i <= no; i++) {
+        if (!gm[i] && objs[i].kind == KD_DICT && objs[i].x > 0) gc_release_dict(objs[i].x);
+    }
+    deadslots = 0;
+    liveobj = 0;
+    livebytes = 0.0;
+    ofree = 0;
+    for (i = no; i >= 1; i--) {
+        if (objs[i].kind == KD_FREE) {
+            objs[i].x = ofree;
+            ofree = i;
+            deadslots += 0;
+            continue;
+        }
+        if (gm[i]) {
+            liveobj++;
+            livebytes += (double)sizeof(Obj) + 16.0 + (double)objs[i].n * (double)sizeof(oop) + (double)objs[i].slen;
+            continue;
+        }
+        if (objs[i].s != NULL) {
+            free(objs[i].s);
+            objs[i].s = NULL;
+        }
+        deadslots += objs[i].n;
+        gc_freed++;
+        objs[i].kind = KD_FREE;
+        objs[i].cls = 0;
+        objs[i].n = 0;
+        objs[i].slen = 0;
+        objs[i].x = ofree;
+        ofree = i;
+    }
+
+    /* frames: everything not marked goes back to the free lists */
+    for (i = 0; i < flcap; i++) fl_head[i] = 0;
+    for (f = 2; f <= nvp; f += sz) {
+        sz = vsz[f];
+        if (!gfm[f]) {
+            vp[f] = fl_head[sz];
+            fl_head[sz] = f;
+        } else {
+            livebytes += (double)sz * (double)sizeof(oop);
+        }
+    }
+
+    /* slots: compact when the dead part is large (always under gcstress) */
+    if (deadslots * 2 > nsl || (gc_stress > 0 && deadslots > 0)) gc_compact_slots();
+
+    free(gm);
+    free(gfm);
+    gm = NULL;
+    gfm = NULL;
+    gc_alloc = 0.0;
+    gc_next = livebytes > GC_MIN ? livebytes : GC_MIN;
+    if (gc_stress > 0) gc_next = 0.0;
+    if (gc_verbose) {
+        fprintf(stderr, "gc %ld: %ld live objects, %.0f live bytes, next at %.0f\n", gc_count, liveobj, livebytes, gc_next);
+    }
+}
+
+static void gc_point(void)
+{
+    if (!gc_on) return;
+    if (gc_stress > 0) {
+        gc_tick++;
+        if (gc_tick < gc_stress) return;
+        gc_tick = 0;
+    }
+    gc_run();
+}
+
+static void gc_init(void)
+{
+    gc_alloc = 0.0;
+    gc_next = GC_MIN;
+    if (!gc_on) gc_next = 1.0e300;
+    if (gc_stress > 0) gc_next = 0.0;
+}
 /* ===== s6_main.c ===== */
 /* =========================================================================
    s6_main.c   initialisation, file reading, the interactive prompt, main
@@ -7178,6 +7557,8 @@ int main(int argc, char **argv)
     long len;
     char *text, *path;
     files = (char **)xmalloc(sizeof(char *) * (size_t)(argc + 1));
+    prim_fn = prim;
+    if (argc < 0) prim_fn = prim_a;   /* never true; keeps the pointer from being resolved at compile time */
     init_state();
     libdir = NULL;
     for (ia = 1; ia < argc; ia++) {
@@ -7185,10 +7566,16 @@ int main(int argc, char **argv)
             ia++;
             libdir = argv[ia];
         } else if (strcmp(argv[ia], "-h") == 0 || strcmp(argv[ia], "--help") == 0) {
-            printf("usage: st [-L libdir] [-i] [file.st ...] [-- arg ...]\n");
+            printf("usage: st [-L libdir] [-i] [-nogc] [-gcstress=N] [file.st ...] [-- arg ...]\n");
             return 0;
         } else if (strcmp(argv[ia], "-i") == 0) {
             repl_mode = 1;
+        } else if (strcmp(argv[ia], "-nogc") == 0) {
+            gc_on = 0;
+        } else if (strncmp(argv[ia], "-gcstress=", 10) == 0) {
+            gc_stress = atol(argv[ia] + 10);
+        } else if (strcmp(argv[ia], "-gcverbose") == 0) {
+            gc_verbose = 1;
         } else if (strcmp(argv[ia], "--") == 0) {
             sargs = (char **)xmalloc(sizeof(char *) * (size_t)(argc + 1));
             for (ia = ia + 1; ia < argc; ia++) sargs[nsargs++] = argv[ia];
@@ -7200,6 +7587,7 @@ int main(int argc, char **argv)
         libdir = getenv("SMALLTALK_LIB");
         if (libdir == NULL) libdir = "lib";
     }
+    gc_init();
     boot();
     for (i = 0; lib_files[i] != 0; i++) {
         path = join_path(libdir, lib_files[i]);

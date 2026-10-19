@@ -60,15 +60,20 @@ static oop dict_new(int c)
     long d;
     long cp;
 
-    nd0 = nd0 + 1;
-    d = nd0;
-    cp = ddcap;
-    dd_head = (long *)xgrow(dd_head, &cp, d + 1, sizeof(long));
-    cp = ddcap;
-    dd_tail = (long *)xgrow(dd_tail, &cp, d + 1, sizeof(long));
-    cp = ddcap;
-    dd_n = (long *)xgrow(dd_n, &cp, d + 1, sizeof(long));
-    ddcap = cp;
+    if (dd_free > 0) {
+        d = dd_free;
+        dd_free = dd_head[d];
+    } else {
+        nd0 = nd0 + 1;
+        d = nd0;
+        cp = ddcap;
+        dd_head = (long *)xgrow(dd_head, &cp, d + 1, sizeof(long));
+        cp = ddcap;
+        dd_tail = (long *)xgrow(dd_tail, &cp, d + 1, sizeof(long));
+        cp = ddcap;
+        dd_n = (long *)xgrow(dd_n, &cp, d + 1, sizeof(long));
+        ddcap = cp;
+    }
     dd_head[d] = 0;
     dd_tail[d] = 0;
     dd_n[d] = 0;
@@ -95,6 +100,7 @@ static void dict_put(oop o, oop key, oop val)
     long e;
     long d;
     long cp;
+    long en;
     char *k;
 
     e = dict_find(o, key);
@@ -103,26 +109,33 @@ static void dict_put(oop o, oop key, oop val)
         return;
     }
     d = S8X(o);
-    ne = ne + 1;
-    cp = decap;
-    de_key = (oop *)xgrow(de_key, &cp, ne + 1, sizeof(oop));
-    cp = decap;
-    de_val = (oop *)xgrow(de_val, &cp, ne + 1, sizeof(oop));
-    cp = decap;
-    de_next = (long *)xgrow(de_next, &cp, ne + 1, sizeof(long));
-    cp = decap;
-    de_live = (int *)xgrow(de_live, &cp, ne + 1, sizeof(int));
-    decap = cp;
-    de_key[ne] = key;
-    de_val[ne] = val;
-    de_next[ne] = 0;
-    de_live[ne] = 1;
-    if (dd_tail[d] == 0) dd_head[d] = ne;
-    else de_next[dd_tail[d]] = ne;
-    dd_tail[d] = ne;
+    gc_alloc += 96.0;
+    if (de_free > 0) {
+        en = de_free;
+        de_free = de_next[en];
+    } else {
+        ne = ne + 1;
+        en = ne;
+        cp = decap;
+        de_key = (oop *)xgrow(de_key, &cp, ne + 1, sizeof(oop));
+        cp = decap;
+        de_val = (oop *)xgrow(de_val, &cp, ne + 1, sizeof(oop));
+        cp = decap;
+        de_next = (long *)xgrow(de_next, &cp, ne + 1, sizeof(long));
+        cp = decap;
+        de_live = (int *)xgrow(de_live, &cp, ne + 1, sizeof(int));
+        decap = cp;
+    }
+    de_key[en] = key;
+    de_val[en] = val;
+    de_next[en] = 0;
+    de_live[en] = 1;
+    if (dd_tail[d] == 0) dd_head[d] = en;
+    else de_next[dd_tail[d]] = en;
+    dd_tail[d] = en;
     dd_n[d] = dd_n[d] + 1;
     k = dict_ckey(d, key);
-    smap_put(&dmap, k, ne);
+    smap_put(&dmap, k, en);
     free(k);
 }
 
@@ -322,8 +335,10 @@ static oop prim_b(int p, oop rcv, long base, int na)
         memcpy(buf, OS(rcv), (size_t)n);
         memcpy(buf + n, OS(a1), (size_t)len);
         buf[n + len] = '\0';
-        r = mkstrn(buf, n + len);
-        free(buf);
+        r = newobj(cls_String, KD_STR, 0);   /* takes over buf */
+        OS(r) = buf;
+        OSLEN(r) = n + len;
+        gc_alloc += (double)(n + len) + 16.0;
         return r;
 
     case PR_STRCOPY:

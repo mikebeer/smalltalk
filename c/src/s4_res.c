@@ -335,7 +335,9 @@ static oop run_seq_in(int c, long st, long *keepfb)
     vp[fb + 3] = 0;
     init_temps(fb + 4, sc_max[1]);
     if (keepfb != NULL) *keepfb = fb;
+    act_push(fb);
     v = ev(seq, fb);
+    nact--;
     return v;
 }
 
@@ -343,11 +345,13 @@ static oop run_seq_in(int c, long st, long *keepfb)
 static void run_doit(long st)
 {
     oop v, er;
-    long eb;
+    long eb, ab0;
     cdepth = 0;
     unw = UW_NONE;
     htop = 0;
+    ab0 = asp;
     v = run_seq_in(cls_UndefinedObject, st, NULL);
+    ast_push(v);   /* the value stays a collector root while the scheduler runs */
     if (unw == 0 && in_eval == 0) run_scheduler();
     if (repl_echo == 1 && unw == 0 && v != NIL_OOP) {
         if (cof(v) != find_class("TextCollector")) {
@@ -370,6 +374,7 @@ static void run_doit(long st)
         if (unw == UW_EXIT) halted = 1;
         unw = UW_NONE;
     }
+    asp = ab0;
     htop = 0;
 }
 
@@ -412,7 +417,9 @@ static oop eval_string(const char *text)
         vp[fb + 2] = NIL_OOP;
         vp[fb + 3] = 0;
         init_temps(fb + 4, sc_max[1]);
+        act_push(fb);
         v = ev(seq, fb);
+        nact--;
         if (unw == UW_RET) {
             unw = UW_NONE;
             v = unw_v;
